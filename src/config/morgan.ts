@@ -4,10 +4,11 @@ import config from './config';
 import logger from './logger';
 
 morgan.token('message', (req, res: Response) => res.locals.errorMessage || '');
+morgan.token('id', (req, res: Response) => res.locals.requestId || '-');
 
 const getIpFormat = () => (config.env === 'production' ? ':remote-addr - ' : '');
-const successResponseFormat = `${getIpFormat()}:method :url :status - :response-time ms`;
-const errorResponseFormat = `${getIpFormat()}:method :url :status - :response-time ms - message: :message`;
+const successResponseFormat = `${getIpFormat()}[:id] :method :url :status - :response-time ms`;
+const errorResponseFormat = `${getIpFormat()}[:id] :method :url :status - :response-time ms - message: :message`;
 
 export const successHandler = morgan(successResponseFormat, {
     skip: (req, res) => res.statusCode >= 400,

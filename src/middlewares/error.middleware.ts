@@ -2,46 +2,58 @@ import {Request, Response, NextFunction, ErrorRequestHandler} from 'express';
 import {ZodError} from 'zod';
 import httpStatus from 'http-status';
 import {ApiError, ApiResponse, PrismaError} from '@utils/index';
+import {logger} from '@config/index';
 import {Prisma} from '@prisma/client';
 
-const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
-    const message = `Cannot find the resource ${req.originalUrl} on the server at ${req.protocol}://${req.get('host')}`;
-    const error = new ApiError(httpStatus.NOT_FOUND, message);
-    res.status(httpStatus.NOT_FOUND).json(
-        new ApiResponse(httpStatus.NOT_FOUND, undefined, message),
-    );
-    next(error);
+const notFoundHandler = (_req: Request, _res: Response, next: NextFunction) => {
+    next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 };
 
 const errorConverter: ErrorRequestHandler = (err, _req, _res, next) => {
-    if (err instanceof ZodError) {
-        const message = 'Validation failed';
+    let converted: ApiError;
+    if (err instanceof ApiError) {
+        converted = err;
+    } else if (err instanceof ZodError) {
         const errors = err.errors.map((error) => ({
             field: error.path.join('.'),
             message: error.message,
         }));
-
-        err = new ApiError(httpStatus.BAD_REQUEST, message, errors);
+        converted = new ApiError(httpStatus.BAD_REQUEST, 'Validation failed', errors);
     } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        err = new PrismaError(err);
-    } else if (!(err instanceof ApiError)) {
-        const statusCode = httpStatus.INTERNAL_SERVER_ERROR;
-        const message = err.message || httpStatus[statusCode];
-        err = new ApiError(statusCode, message);
+        converted = new PrismaError(err);
+    } else {
+        const status = Number(err?.status ?? err?.statusCode);
+        if (Number.isInteger(status) && status >= 400 && status < 500) {
+            converted = new ApiError(
+                status,
+                status === httpStatus.REQUEST_ENTITY_TOO_LARGE
+                    ? 'Request body too large'
+                    : 'Invalid request body',
+            );
+        } else {
+            converted = new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Internal server error');
+        }
     }
-
-    next(err);
+    if (converted !== err) converted.cause = err;
+    next(converted);
 };
 
-const errorHandler: ErrorRequestHandler = (err, _, res, next) => {
-    let {statusCode} = err;
+const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+    if (res.headersSent) return next(err);
+    const statusCode: number = err.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
     const {message} = err;
-    statusCode = statusCode || httpStatus.INTERNAL_SERVER_ERROR;
+    if (statusCode >= 500) {
+        logger.error(`[${res.locals.requestId}] ${(err.cause ?? err)?.stack ?? err.message}`);
+    }
     res.locals.errorMessage = message;
     res.status(statusCode).json(
-        new ApiResponse(statusCode, undefined, message, err.errors || undefined),
+        new ApiResponse(
+            statusCode,
+            undefined,
+            message,
+            err.errors?.length ? err.errors : undefined,
+        ),
     );
-    next();
 };
 
 export {errorHandler, errorConverter, notFoundHandler};

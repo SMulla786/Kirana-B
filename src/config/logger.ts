@@ -1,5 +1,4 @@
 import winston from 'winston';
-import moment from 'moment';
 import config from './config';
 
 const enumerateErrorFormat = winston.format((info) => {
@@ -13,7 +12,7 @@ const logger = winston.createLogger({
     level: config.env === 'development' ? 'debug' : 'info',
     format: winston.format.combine(
         winston.format((info) => {
-            info.timestamp = moment().format('DD-MM HH:mm');
+            info.timestamp = new Date().toISOString();
             return info;
         })(),
         enumerateErrorFormat(),

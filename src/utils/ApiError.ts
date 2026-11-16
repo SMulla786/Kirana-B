@@ -3,6 +3,7 @@ class ApiError extends Error {
     data: unknown | null;
     success: boolean;
     errors: string[] | object[];
+    cause?: unknown;
 
     constructor(
         statusCode: number,
