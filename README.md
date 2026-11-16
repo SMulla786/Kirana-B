@@ -81,7 +81,8 @@ CI is defined in `.github/workflows/ci.yml` (Postgres 16 service, typecheck, lin
     `src/config/permissions.ts`.
   - Roles: OWNER, MANAGER, CASHIER, INVENTORY_MANAGER, ACCOUNTANT, STAFF.
   - The platform `ADMIN` stays on `User.role`.
-- **Docs:** `/api-docs` (Swagger UI). The OpenAPI spec generated from zod (P-008) is still to do.
+- **Docs:** `/api-docs` (Swagger UI) and `/api-docs/openapi.json`, generated from zod (A-025). After
+  changing routes run `npm run openapi:export` and commit `openapi.json`.
 
 ## Routes (Phase 1A)
 

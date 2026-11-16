@@ -8,9 +8,9 @@ Each phase runs in a fresh Claude Code chat, using that phase's prompt from
 | --- | ------------------------------------------------------------------------------------------ | --------------------------- | ---------------------- |
 | 0   | Discovery and baseline                                                                     | —                           | ✅ Done 2026-11-16     |
 | 1A  | Backend foundation: build fix, test harness, auth security, business + store, roles, tenancy | 0 + owner prerequisites     | ✅ Done 2026-11-16 (local, not pushed) |
-| 1B  | Client foundation: `kirana-F` web admin shell, design tokens, desktop POS placeholder shell | 1A; O-4, O-9                | 🟡 Web shell built with 1A; remainder ⏭ Next |
-| 2   | Catalogue, units, barcodes, stock ledger                                                   | 1A (1B for screens)         | Not started            |
-| 3   | Desktop hybrid POS: search, scanning, cart, held bills                                     | 1B, 2                       | Not started            |
+| 1B  | Client foundation: `kirana-F` web admin shell, design tokens (desktop shell moved to the end, A-023) | 1A; O-9                     | ✅ Done 2026-11-16 (web scope) |
+| 2   | Catalogue, units, barcodes, stock ledger                                                   | 1A (1B for screens)         | ⏭ Next                 |
+| 3   | POS (web first, A-023): search, scanning, cart, held bills                                 | 1B, 2                       | Not started            |
 | 4   | Checkout, payments, invoices, receipt printing, returns                                    | 3; O-8, O-10                | Not started            |
 | 5   | Customers and udhaar ledger                                                                | 4                           | Not started            |
 | 6   | Suppliers, purchasing, goods receiving, stock operations                                   | 2, 4                        | Not started            |
@@ -19,6 +19,8 @@ Each phase runs in a fresh Claude Code chat, using that phase's prompt from
 | 9   | Desktop offline-first billing and sync                                                     | 4–6 stable; O-11            | Not started            |
 | 10  | Quality hardening, pilot readiness, release                                                | 1–9; O-13                   | Not started            |
 | 11  | Post-MVP features, one sub-phase at a time                                                 | 10 + pilot evidence         | Not started            |
+
+**Order (A-023, owner 2026-11-16):** web first. Phases 2-7 are built in `kirana-F`, with POS/billing as online web screens. The desktop shell, offline billing and sync (Phase 9) and Android (Phase 8) come last, followed by Phase 10.
 
 Offline support shapes design from Phase 1 (UUIDs, idempotency, append-only records), but the sync engine
 waits for Phase 9, once sale/payment/stock/ledger contracts are stable.
@@ -70,8 +72,8 @@ exists as local commits. **Remainder:**
 2. Add ESLint and page-level tests to kirana-F.
 3. Generate the OpenAPI spec from zod in Kirana-B, and a typed kirana-F client from it (P-008). This
    replaces `src/api/types.ts`.
-4. Add i18n scaffolding once O-9 is answered.
-5. Build the `Kirana-desktop` placeholder shell once O-4 is answered.
+4. Add i18n with English, Hindi and Marathi (A-024).
+5. The `Kirana-desktop` placeholder shell moved to the desktop phase at the end (A-023).
 
 Settle O-4 and O-9, then clone the client repos next to the backend. In `kirana-F`, build the web
 admin shell (React + TS + Vite, P-009): login, business setup, role-aware navigation, design tokens,

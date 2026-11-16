@@ -26,7 +26,7 @@ Full phase prompts: `../KiranaOS_Development_Blueprint.pdf` (outside git, in the
 | Build            | `npm run build` (= `tsc`)                                   | OK                                      |
 | Typecheck        | `npx tsc --noEmit` and `npx tsc --noEmit -p tsconfig.test.json` | 0 errors                            |
 | Lint + format    | `npm run lint` (ESLint + Prettier, src + tests)             | Clean                                   |
-| Tests            | `npm test` (Vitest + supertest, real Postgres `*_test` DB)  | 81 passed                               |
+| Tests            | `npm test` (Vitest + supertest, real Postgres `*_test` DB)  | 85 passed; CI green                     |
 | Prisma (safe)    | `npx prisma validate`, `npx prisma migrate status`          | OK; 8 migrations, dev DB up to date     |
 | Prisma client    | `npm run prisma:generate`                                   | In sync                                 |
 

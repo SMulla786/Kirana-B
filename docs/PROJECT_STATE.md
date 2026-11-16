@@ -1,7 +1,17 @@
 # Project state
 
-_Last updated 2026-11-16 · Phase 1A (backend foundation) done, plus the `kirana-F` web shell · Next: see
-the bottom_
+_Last updated 2026-11-16 · **Phase 1 complete for the web scope** (1A backend + 1B web shell; desktop and
+Android moved to the end by A-023) · Next: Phase 2_
+
+**Phase 1 closing (2026-11-16):**
+- Pushed `Kirana-B` to `45d1b9a`; GitHub Actions CI ran on it and **passed**.
+- Then added the OpenAPI spec (`c046128`, `3e7cc53`; A-025) and these docs. Kirana-B now has 85 tests.
+- kirana-F now has the A-022 restyle (`fd07c95`), i18n en/hi/mr (`453fcfe`; A-024) and generated API types
+  (`1394a43`, `04d6ec4`).
+- kirana-F checks: tsc ✅, vitest 41 passed, prettier ✅, build ✅.
+- Live checks at 375 and 1280 px passed, including Marathi at 375 px.
+- The owner rotated the leaked credentials (O-1).
+- The final batch is pushed only after the owner's OK.
 
 ## Repositories
 
@@ -118,10 +128,9 @@ in one commit with their tests.
 
 ## Known gaps and risks
 
-1. **Leaked credentials (owner):** rotate the AWS key and Gmail app password, and archive or delete
-   `kirana-backend` (O-1, O-17).
-2. **Nothing is pushed:** `Kirana-B` and `kirana-F` commits are local only, so CI has never run on GitHub.
-   Pushing needs the owner's go-ahead.
+1. **Old repo:** the credentials are rotated (O-1). Still to do: archive or delete `kirana-backend` (O-17).
+2. **Pushes:** the first batch is pushed (CI green on `45d1b9a`). Later commits wait for the owner's OK.
+   `Kirana-B` is a **public** GitHub repo (the API answered without auth). Confirm that's intended.
 3. **Migrations exist only on this PC** (P-006). Back up `prisma/migrations/`.
 4. **kirana-F:**
    - The mobile drawer is fixed and verified (`e58f246`).
@@ -170,14 +179,12 @@ in one commit with their tests.
 ## Next action
 
 1. **Owner:**
-   - Review the local commits in `Kirana-B` and `kirana-F`, then say whether to push (CI then runs on
-     GitHub).
-   - Rotate the credentials (O-1).
-   - Back up the migrations.
-   - Answer O-4 (desktop: Electron plus target hardware) and O-9 (languages).
-2. **Then, in a fresh chat: Phase 1B remainder.** Paste the Phase 1 prompt and add:
-   _"Implement the Phase 1B remainder only, as defined in docs/PHASE_PLAN.md."_ That covers:
-   - verify the kirana-F mobile fix
-   - the OpenAPI spec from zod plus a generated kirana-F client (P-008)
-   - the `Kirana-desktop` placeholder shell, if O-4 is answered
-3. After that, **Phase 2 (catalogue, units, barcodes, stock ledger)**. Decide O-6 and O-15 first.
+   - Approve pushing the final Phase 1 batch (Kirana-B docs + OpenAPI; kirana-F i18n + types).
+   - Confirm that Kirana-B should be public.
+   - Archive or delete `kirana-backend`.
+   - Back up `prisma/migrations/`.
+   - Answer O-6 (global catalogue: keep or drop?) and O-15 (cost basis), which Phase 2 needs.
+   - Get the hi/mr strings reviewed by a native speaker before the pilot.
+2. **Then, in a fresh chat:** paste the blueprint's Phase 2 prompt and add:
+   _"Implement Phase 2 only, as defined in docs/PHASE_PLAN.md. Web first (A-023): catalogue and stock
+   screens go in kirana-F, following CLAUDE.md 'UI design rules'."_
