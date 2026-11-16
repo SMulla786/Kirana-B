@@ -192,6 +192,20 @@ describe('held bills', () => {
         }).expect(400);
     });
 
+    it('weighs in kg on a gram base without a stored kg unit row', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token, {baseUnit: 'GRAM', sellingPrice: '0.12'});
+        const res = await hold(token, {
+            lines: [{productId: p.id, unit: 'KILOGRAM', quantity: '1.25'}],
+        }).expect(201);
+        expect(res.body.data.lines[0]).toMatchObject({
+            factor: '1000',
+            unitPrice: '120.00',
+            lineTotal: '150.00',
+        });
+        await hold(token, {lines: [{productId: p.id, unit: 'PIECE', quantity: 1}]}).expect(400);
+    });
+
     it('never touches stock, orders or wallets', async () => {
         const {token, kiranaId} = await createOwner();
         const p = await createProduct(token);

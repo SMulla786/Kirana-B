@@ -6095,16 +6095,37 @@
                           ]
                         },
                         "quantity": {
-                          "type": "string",
-                          "example": "12.50"
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
                         },
                         "unitPrice": {
-                          "type": "string",
-                          "example": "12.50"
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
                         },
                         "discount": {
-                          "type": "string",
-                          "example": "12.50"
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
                         }
                       },
                       "required": [

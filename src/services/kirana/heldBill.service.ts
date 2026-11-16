@@ -1,8 +1,8 @@
 import {z} from 'zod';
-import {Prisma} from '@prisma/client';
+import {Prisma, UnitCode} from '@prisma/client';
 import prisma from 'client';
 import ApiError from '@utils/ApiError';
-import {toBaseQuantity} from '@utils/units';
+import {resolveFactor, toBaseQuantity} from '@utils/units';
 import {posValidation} from '@validations/index';
 import {productInclude, serializeProduct} from './catalog.service';
 
@@ -114,11 +114,13 @@ class HeldBillService {
                 throw new ApiError(status, message, [{field: `lines.${i}`, message}]);
             };
             const p = byId.get(l.productId)!;
-            const factors = new Map<string, Decimal>([
-                [p.baseUnit, D(1)],
-                ...p.units.map((u): [string, Decimal] => [u.unit, u.factor]),
-            ]);
-            const factor = factors.get(l.unit);
+            // A stored pack size, else a fixed metric factor (kg on a gram base), as applyMovement does.
+            const factorOf = (unit: UnitCode) => {
+                const fixed = resolveFactor(p.baseUnit, unit);
+                const stored = p.units.find((u) => u.unit === unit)?.factor;
+                return stored ?? (typeof fixed === 'string' ? undefined : fixed);
+            };
+            const factor = factorOf(l.unit);
             if (!factor) return fail(400, `${l.unit} is not one of this product's units`);
             toBaseQuantity(l.quantity, factor, p.baseUnit); // throws 400 on bad precision/fraction
 
@@ -126,7 +128,7 @@ class HeldBillService {
             const catalogue =
                 p.sellingPrice === null
                     ? null
-                    : round2(p.sellingPrice.mul(factor).div(factors.get(p.salesUnit)!));
+                    : round2(p.sellingPrice.mul(factor).div(factorOf(p.salesUnit) ?? 1));
             const overridden = !!l.unitPrice && !(catalogue && l.unitPrice.equals(catalogue));
             if (overridden) {
                 if (!ctx.canOverridePrice) return fail(403, 'You cannot change the price');
