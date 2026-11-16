@@ -1,4 +1,4 @@
-import {File} from 'multer';
+import {MembershipRole, Role} from '@prisma/client';
 
 declare global {
     namespace Express {
@@ -8,17 +8,14 @@ declare global {
                 username: string;
                 email: string;
                 fullname: string;
+                phoneNumber: string;
                 role: Role;
-                phoneNumber?: string;
+                sessionId: string;
+                /** Tenant for this session, resolved server-side from the session row. */
                 kiranaId?: string;
-                employeeId?: string;
+                storeId?: string;
+                membershipRole?: MembershipRole;
             };
-            file?: File;
-            files?:
-                | {
-                      [fieldname: string]: Express.Multer.File[];
-                  }
-                | Express.Multer.File[];
         }
     }
 }

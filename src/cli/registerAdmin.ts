@@ -9,9 +9,7 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
-const userInputSchema = userValidation.registerUserSchema.omit({
-    role: true,
-});
+const userInputSchema = userValidation.userSchema;
 
 type UserInput = z.infer<typeof userInputSchema>;
 

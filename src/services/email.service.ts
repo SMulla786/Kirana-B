@@ -1,7 +1,11 @@
 import nodemailer from 'nodemailer';
 import {config, logger} from '@config/index';
 
-const transport = nodemailer.createTransport(config.email.smtp);
+// Tests never send mail: jsonTransport only serialises the message.
+const transport =
+    config.env === 'test'
+        ? nodemailer.createTransport({jsonTransport: true})
+        : nodemailer.createTransport(config.email.smtp);
 
 if (config.env !== 'test') {
     transport
@@ -41,78 +45,32 @@ const sendEmail = async (
     await transport.sendMail(msg);
 };
 
-/**
- * Send reset password email
- * @param {string} to
- * @param {string} token
- * @param {string} [customUrl] - Optional custom URL for the reset password page
- * @returns {Promise}
- */
-const sendResetPasswordEmail = async (to: string, token: string, customUrl?: string) => {
+/** Reset link carries a single-use opaque token (only its hash is stored). */
+const sendResetPasswordEmail = async (to: string, token: string) => {
     try {
-        const subject = 'Reset password';
-        const resetPasswordUrl = customUrl
-            ? `${customUrl}?token=${token}`
-            : `http://localhost:5173/reset-password?token=${token}`;
-
-        const text = `
-            Dear user,
-            To reset your password, click on this link: ${resetPasswordUrl}
-            If you did not request any password resets, then ignore this email.
-        `;
-
-        const html = `
-            <p>Dear user,</p>
-            <p>To reset your password, click on this link: 
-                <a href="${resetPasswordUrl}">Reset Password</a>
-            </p>
-            <p>If you did not request any password resets, you can safely ignore this email.</p>
-        `;
-
-        await sendEmail(to, subject, text, html);
-        logger.info(`Reset password email sent to ${to}`);
-
+        const url = `${config.appUrl}/reset-password?token=${encodeURIComponent(token)}`;
+        const text = `To reset your KiranaOS password, open this link: ${url}
+It expires in ${config.jwt.resetPasswordExpirationMinutes} minutes. If you did not ask for this, ignore this email.`;
+        const html = `<p>To reset your KiranaOS password, <a href="${url}">click here</a>.</p><p>The link expires in ${config.jwt.resetPasswordExpirationMinutes} minutes. If you did not ask for this, ignore this email.</p>`;
+        await sendEmail(to, 'Reset your KiranaOS password', text, html);
         return {success: true};
     } catch (error) {
         logger.error(`Failed to send reset password email: ${error}`);
-        return {
-            success: false,
-            message: 'Error sending reset password email',
-        };
+        return {success: false};
     }
 };
 
-/**
- * Send verification email
- * @param {string} to
- * @param {string} username
- * @param {string} token
- * @param {string} [customUrl] - Optional custom URL for the email verification page
- * @returns {Promise}
- */
-const sendVerificationEmail = async (
-    to: string,
-    username: string,
-    token: string,
-    customUrl?: string,
-) => {
+/** Links always point at APP_URL; callers cannot choose the redirect target. */
+const sendVerificationEmail = async (to: string, username: string, code: string) => {
     try {
-        const subject = 'Email Verification';
-        const verificationEmailUrl = `${customUrl ?? 'http://link-to-app/verify'}?username=${username}&code=${token}`;
-        const text = `Dear ${username},
-        To verify your email, click on this link: ${verificationEmailUrl}`;
-
-        const html = `<p>Dear ${username},</p>
-        <p>To verify your email, click on this link: <a href="${verificationEmailUrl}">Verify Email</a></p>`;
-
-        await sendEmail(to, subject, text, html);
+        const url = `${config.appUrl}/verify?username=${encodeURIComponent(username)}&code=${code}`;
+        const text = `Your KiranaOS verification code is ${code}. Or open: ${url}`;
+        const html = `<p>Your KiranaOS verification code is <b>${code}</b>.</p><p>Or <a href="${url}">verify your email</a>.</p>`;
+        await sendEmail(to, 'Verify your KiranaOS email', text, html);
         return {success: true};
     } catch (error) {
         logger.error(`Failed to send verification email: ${error}`);
-        return {
-            success: false,
-            message: 'Error sending verification email',
-        };
+        return {success: false};
     }
 };
 

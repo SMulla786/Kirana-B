@@ -5,6 +5,17 @@ import ApiError from '@utils/ApiError';
 type createOrder = z.infer<typeof orderValidation.createOrderSchema>;
 
 class OrderService {
+    private async assertMaterials(
+        kiranaId: string,
+        items: {materialId: string}[] | undefined,
+        db: Pick<typeof prisma, 'kiranaMaterial'> = prisma,
+    ) {
+        const ids = [...new Set((items ?? []).map((i) => i.materialId))];
+        if (!ids.length) return;
+        const n = await db.kiranaMaterial.count({where: {id: {in: ids}, kiranaId}});
+        if (n !== ids.length) throw new ApiError(404, 'Product not found');
+    }
+
     public async createOrder(kiranaId: string, data: createOrder) {
         const {client, orderItems = [], ...orderData} = data;
 
@@ -15,6 +26,7 @@ class OrderService {
                 0,
             );
 
+        await this.assertMaterials(kiranaId, orderItems);
         return await prisma.$transaction(async (tx) => {
             const cli = await tx.client.upsert({
                 where: {kiranaId_phoneNumber: {kiranaId, phoneNumber: client.phoneNumber}},
@@ -67,12 +79,16 @@ class OrderService {
         });
     }
 
-    public async updateOrder(id: string, data: createOrder) {
+    public async updateOrder(kiranaId: string, id: string, data: createOrder) {
         return await prisma.$transaction(async (tx) => {
-            const ex = await tx.order.findUnique({where: {id}, include: {orderItem: true}});
+            const ex = await tx.order.findFirst({
+                where: {id, kiranaId},
+                include: {orderItem: true},
+            });
             if (!ex) throw new ApiError(404, 'Order not found');
 
             const {client, orderItems, ...od} = data;
+            await this.assertMaterials(kiranaId, orderItems, tx);
 
             const cliId = client
                 ? (
@@ -124,15 +140,14 @@ class OrderService {
         });
     }
 
-    public async deleteOrder(id: string) {
-        const order = await prisma.order.delete({
-            where: {id},
-        });
-        return order;
+    public async deleteOrder(kiranaId: string, id: string) {
+        const ex = await prisma.order.findFirst({where: {id, kiranaId}, select: {id: true}});
+        if (!ex) throw new ApiError(404, 'Order not found');
+        return prisma.order.delete({where: {id}});
     }
-    public async getOrder(id: string) {
-        const order = await prisma.order.findUnique({
-            where: {id},
+    public async getOrder(kiranaId: string, id: string) {
+        const order = await prisma.order.findFirst({
+            where: {id, kiranaId},
             include: {
                 client: true,
                 orderItem: {
@@ -142,6 +157,7 @@ class OrderService {
                 },
             },
         });
+        if (!order) throw new ApiError(404, 'Order not found');
         return order;
     }
     public async getOrders(kiranaId: string) {
@@ -153,9 +169,9 @@ class OrderService {
         });
         return orders;
     }
-    public async getOrdersByClientId(clientId: string) {
+    public async getOrdersByClientId(kiranaId: string, clientId: string) {
         const orders = await prisma.order.findMany({
-            where: {clientId},
+            where: {clientId, kiranaId},
             include: {
                 client: true,
             },

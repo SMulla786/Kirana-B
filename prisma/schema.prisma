@@ -13,6 +13,15 @@ enum Role {
   EMPLOYEE
 }
 
+enum MembershipRole {
+  OWNER
+  MANAGER
+  CASHIER
+  INVENTORY_MANAGER
+  ACCOUNTANT
+  STAFF
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -29,32 +38,88 @@ enum MaterialUnit {
 }
 
 model User {
-  id                   String    @id @default(uuid())
-  username             String    @unique
-  email                String
-  fullname             String
-  password             String
-  refreshToken         String?
-  verifyCode           String?
-  verifyCodeExpiry     DateTime?
-  isVerified           Boolean   @default(false)
-  isActive             Boolean   @default(true)
-  phoneNumber          String
-  secondaryPhoneNumber String?
-  role                 Role      @default(KIRANA)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  kirana               kirana?
-  employee             employee?
+  id                     String       @id @default(uuid())
+  username               String       @unique
+  email                  String       @unique
+  fullname               String
+  password               String
+  refreshToken           String?
+  verifyCode             String?
+  verifyCodeExpiry       DateTime?
+  isVerified             Boolean      @default(false)
+  isActive               Boolean      @default(true)
+  phoneNumber            String
+  secondaryPhoneNumber   String?
+  role                   Role         @default(KIRANA)
+  // single-use password reset: only a SHA-256 hash is stored
+  passwordResetTokenHash String?      @unique
+  passwordResetExpiry    DateTime?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  kirana                 kirana?
+  employee               employee?
+  memberships            Membership[]
+  sessions               Session[]
+}
+
+/// One login session per device. The refresh token is opaque; only its SHA-256 hash is stored.
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  kiranaId         String?
+  storeId          String?
+  refreshTokenHash String
+  deviceName       String?
+  userAgent        String?
+  ip               String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+/// A user's role in one business (tenant). Platform ADMIN stays on User.role.
+model Membership {
+  id        String         @id @default(uuid())
+  userId    String
+  kiranaId  String
+  role      MembershipRole
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      User           @relation(fields: [userId], references: [id])
+  kirana    kirana         @relation(fields: [kiranaId], references: [id])
+
+  @@unique([userId, kiranaId])
+  @@index([kiranaId])
+}
+
+/// A physical shop. MVP: exactly one default store per business, created with it.
+model Store {
+  id        String   @id @default(uuid())
+  kiranaId  String
+  name      String
+  address   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  kirana    kirana   @relation(fields: [kiranaId], references: [id])
+
+  @@index([kiranaId])
 }
 
 model kirana {
   id               String                   @id @default(uuid())
   userId           String                   @unique
+  name             String
   address          String
   City             String
-  amount           Decimal
-  renewalAmount    Decimal
+  gstin            String?
+  amount           Decimal                  @default(0)
+  renewalAmount    Decimal                  @default(0)
   // languageId       String
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -65,6 +130,8 @@ model kirana {
   client           client[]
   order            order[]
   purchaseOrder    purchaseOrder[]
+  stores           Store[]
+  memberships      Membership[]
 }
 
 model employee {
@@ -177,10 +244,12 @@ model clientWallet {
   updatedAt             DateTime              @updatedAt
   clientWalletHistories clientWalletHistory[]
 }
+
 enum HistoryType {
   DEBIT
   CREDIT
 }
+
 model clientWalletHistory {
   id             String       @id @default(uuid())
   clientId       String

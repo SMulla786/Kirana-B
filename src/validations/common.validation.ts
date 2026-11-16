@@ -3,7 +3,6 @@ import {z} from 'zod';
 const idSchema = z.string().uuid('Invalid ID format.');
 const nameSchema = z.string().min(1, 'Name is required.');
 const tokenSchema = z.string().min(1, 'Token is required for authentication');
-const refreshTokenSchema = z.string().optional();
 
 const paginationSchema = z.object({
     page: z
@@ -35,6 +34,5 @@ export default {
     paginationSchema,
     searchSchema,
     paginationAndSearchSchema,
-    refreshTokenSchema,
     kiranaIdSchema,
 };

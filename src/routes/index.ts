@@ -1,13 +1,14 @@
 import {Router} from 'express';
-import userRoute from './user.routes';
-// import adminRoutes from './admin';
-// import managerRoutes from './manager';
-// import studentRoutes from './student';
+import authRoutes from './auth.routes';
+import businessRoutes from './business.routes';
+import catalogRoutes from './catalog.routes';
+import adminRoutes from './admin';
+
 const router = Router();
 
-router.use('/users', userRoute);
-// router.use('/admin', adminRoutes);
-// router.use('/manager', managerRoutes);
-// router.use('/student', studentRoutes);
+router.use('/auth', authRoutes);
+router.use('/business', businessRoutes);
+router.use('/catalog', catalogRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

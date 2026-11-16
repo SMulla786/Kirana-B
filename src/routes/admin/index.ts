@@ -5,5 +5,6 @@ import {adminController} from '@controllers/index';
 const router = Router();
 router.use(verifyJWT, checkAdmin);
 router.get('/', adminController.adminDashboard);
+router.post('/businesses', adminController.createBusiness);
 
 export default router;

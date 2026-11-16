@@ -5,76 +5,78 @@ import {
     usernameSchema,
     fullnameSchema,
     phoneNumberSchema,
+    gstinSchema,
 } from './custom.validation';
 
-import {commonValidation} from '@validations/index';
-import {Role} from '.prisma/client/default';
-
-const registerUserSchema = z.object({
-    fullname: fullnameSchema.trim(),
-    email: emailSchema.trim(),
-    username: usernameSchema.trim(),
-    password: password,
-    phoneNumber: phoneNumberSchema.trim(),
-    secondaryPhoneNumber: phoneNumberSchema.optional(),
-    role: z.nativeEnum(Role).optional(),
-});
-
-const loginUserSchema = z.object({
-    email: emailSchema.optional(),
-    username: usernameSchema.optional(),
-    password: password,
-});
-
-const changePasswordSchema = z.object({
-    currentPassword: password,
-    newPassword: password,
-});
-
-const requestPasswordResetSchema = z.object({
+const userFields = {
+    fullname: fullnameSchema,
     email: emailSchema,
-});
-
-const resetPasswordSchema = z.object({
-    newPassword: password,
-});
-
-const updateUserSchema = registerUserSchema
-    .omit({
-        email: true,
-        username: true,
-        password: true,
-        role: true,
-    })
-    .partial();
-
-const refreshTokenRequestSchema = z.object({
-    refreshToken: commonValidation.refreshTokenSchema,
-    cookies: z
-        .object({
-            refreshToken: commonValidation.refreshTokenSchema,
-        })
-        .refine((data) => data.refreshToken, {
-            message: 'Refresh token is required',
-            path: ['refreshToken'],
-        }),
-});
-
-const verifyVerificationCodeSchema = z.object({
     username: usernameSchema,
-    code: z.string().length(6, {
-        message: 'Verification code must be 6 digits!',
-    }),
-});
+    password,
+    phoneNumber: phoneNumberSchema,
+    secondaryPhoneNumber: phoneNumberSchema.optional(),
+};
+
+/** A login identity. Public input never chooses a platform role. */
+const userSchema = z.object(userFields).strict();
+
+const businessSchema = z
+    .object({
+        name: z.string().trim().min(2).max(100),
+        address: z.string().trim().min(5).max(300),
+        City: z.string().trim().min(2).max(100),
+        gstin: gstinSchema.optional(),
+    })
+    .strict();
+
+/** Self-signup and admin onboarding: owner user + business (+ default store). */
+const registerSchema = z.object({...userFields, business: businessSchema}).strict();
+
+const loginSchema = z
+    .object({
+        identifier: z.string().trim().min(1).max(254),
+        password: z.string().min(1).max(200),
+        deviceName: z.string().trim().max(100).optional(),
+        kiranaId: z.string().uuid().optional(),
+    })
+    .strict();
+
+const verifyCodeSchema = z
+    .object({
+        username: usernameSchema,
+        code: z.string().regex(/^\d{6}$/, 'Verification code must be 6 digits'),
+    })
+    .strict();
+
+const resendCodeSchema = z.object({username: usernameSchema}).strict();
+const forgotPasswordSchema = z.object({email: emailSchema}).strict();
+const resetPasswordSchema = z
+    .object({token: z.string().min(16).max(200), newPassword: password})
+    .strict();
+const changePasswordSchema = z
+    .object({currentPassword: z.string().min(1).max(200), newPassword: password})
+    .strict();
+const refreshTokenSchema = z.string().min(1).max(300);
+
+const updateMeSchema = z
+    .object({
+        fullname: fullnameSchema,
+        phoneNumber: phoneNumberSchema,
+        secondaryPhoneNumber: phoneNumberSchema.nullable(),
+    })
+    .partial()
+    .strict();
 
 export default {
-    registerUserSchema,
-
-    loginUserSchema,
-    changePasswordSchema,
-    updateUserSchema,
-    requestPasswordResetSchema,
-    refreshTokenRequestSchema,
-    verifyVerificationCodeSchema,
+    userSchema,
+    businessSchema,
+    registerSchema,
+    loginSchema,
+    verifyCodeSchema,
+    resendCodeSchema,
+    forgotPasswordSchema,
     resetPasswordSchema,
+    changePasswordSchema,
+    refreshTokenSchema,
+    updateMeSchema,
 };
