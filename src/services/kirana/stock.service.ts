@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {Prisma, StockMovementType, UnitCode} from '@prisma/client';
 import prisma from 'client';
 import ApiError from '@utils/ApiError';
-import {toBaseQuantity} from '@utils/units';
+import {resolveFactor, toBaseQuantity} from '@utils/units';
 import {catalogValidation} from '@validations/index';
 
 type Decimal = Prisma.Decimal;
@@ -77,10 +77,11 @@ export const applyMovement = async (
     if (!product) throw new ApiError(404, 'Product not found');
 
     const unit = input.unit ?? product.baseUnit;
+    // A stored pack size, else a fixed metric factor (kg on a gram base needs no stored unit).
+    const fixedFactor = resolveFactor(product.baseUnit, unit);
     const factor =
-        unit === product.baseUnit
-            ? new Prisma.Decimal(1)
-            : product.units.find((u) => u.unit === unit)?.factor;
+        product.units.find((u) => u.unit === unit)?.factor ??
+        (typeof fixedFactor === 'string' ? undefined : fixedFactor);
     if (!factor) throw new ApiError(400, `${unit} is not one of this product's units`);
 
     const direction = DIRECTION[input.type];

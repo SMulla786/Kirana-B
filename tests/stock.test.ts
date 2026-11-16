@@ -56,6 +56,32 @@ describe('stock ledger', () => {
         expect(prod.body.data.stock.quantity).toBe('10.000');
     });
 
+    it('accepts fixed metric units without a stored unit, but not unknown pack units', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token, {baseUnit: 'GRAM'});
+        const res = await move(token, {
+            productId: p.id,
+            type: 'OPENING',
+            quantity: '2.5',
+            unit: 'KILOGRAM',
+        }).expect(201);
+        expect(res.body.data).toMatchObject({quantity: '2500.000', enteredUnit: 'KILOGRAM'});
+        await move(token, {
+            productId: p.id,
+            type: 'DAMAGE',
+            quantity: 1,
+            unit: 'PACKET',
+            reason: 'torn',
+        }).expect(400);
+        await move(token, {
+            productId: p.id,
+            type: 'DAMAGE',
+            quantity: 1,
+            unit: 'LITRE',
+            reason: 'spilt',
+        }).expect(400);
+    });
+
     it('reconciles StockBalance with the sum of movements', async () => {
         const {token, kiranaId} = await createOwner();
         for (const qty of [7, 12]) {
