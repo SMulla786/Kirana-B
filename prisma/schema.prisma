@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  KIRANA
+  EMPLOYEE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MaterialUnit {
+  KG
+  G
+  PEICE
+  L
+  ML
+  DOZON
+  NOs
+}
+
+model User {
+  id                   String    @id @default(uuid())
+  username             String    @unique
+  email                String
+  fullname             String
+  password             String
+  refreshToken         String?
+  verifyCode           String?
+  verifyCodeExpiry     DateTime?
+  isVerified           Boolean   @default(false)
+  isActive             Boolean   @default(true)
+  phoneNumber          String
+  secondaryPhoneNumber String?
+  role                 Role      @default(KIRANA)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  kirana               kirana?
+  employee             employee?
+}
+
+model kirana {
+  id               String                   @id @default(uuid())
+  userId           String                   @unique
+  address          String
+  City             String
+  amount           Decimal
+  renewalAmount    Decimal
+  // languageId       String
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  user             User                     @relation(fields: [userId], references: [id])
+  employee         employee[]
+  materialCategory KiranaMaterialCategory[]
+  material         KiranaMaterial[]
+  client           client[]
+  order            order[]
+  purchaseOrder    purchaseOrder[]
+}
+
+model employee {
+  id       String @id @default(uuid())
+  userId   String @unique
+  kiranaId String
+  address  String
+  kirana   kirana @relation(fields: [kiranaId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+}
+
+model MaterialCategory {
+  id       String     @id @default(uuid())
+  name     String     @unique
+  material Material[]
+}
+
+model Material {
+  id         String           @id @default(uuid())
+  name       String           @unique
+  inventory  Int              @default(0)
+  unit       MaterialUnit
+  barcode    String           @unique
+  categoryId String
+  category   MaterialCategory @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model KiranaMaterialCategory {
+  id       String           @id @default(uuid())
+  name     String
+  kiranaId String
+  kirana   kirana           @relation(fields: [kiranaId], references: [id])
+  material KiranaMaterial[]
+
+  @@unique([kiranaId, name])
+}
+
+model KiranaMaterial {
+  id                String                 @id @default(uuid())
+  name              String
+  unit              MaterialUnit
+  categoryId        String
+  kiranaId          String
+  barcode           String
+  inventory         Float                  @default(0)
+  kirana            kirana                 @relation(fields: [kiranaId], references: [id])
+  category          KiranaMaterialCategory @relation(fields: [categoryId], references: [id])
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  orderItem         orderItem[]
+  purchaseOrderItem purchaseOrderItem[]
+
+  @@unique([kiranaId, barcode])
+  @@unique([kiranaId, name])
+  @@index([kiranaId, barcode])
+}
+
+model client {
+  id                  String                @id @default(uuid())
+  name                String
+  address             String
+  phoneNumber         String
+  kiranaId            String
+  kirana              kirana                @relation(fields: [kiranaId], references: [id])
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  order               order[]
+  clientWallet        clientWallet?
+  clientWalletHistory clientWalletHistory[]
+
+  @@unique([kiranaId, phoneNumber])
+}
+
+model order {
+  id                    String                @id @default(uuid())
+  clientId              String
+  client                client                @relation(fields: [clientId], references: [id])
+  kiranaId              String
+  kirana                kirana                @relation(fields: [kiranaId], references: [id])
+  createdAt             DateTime              @default(now())
+  totalPrice            Float
+  paid                  Float
+  updatedAt             DateTime              @updatedAt
+  orderItem             orderItem[]
+  clientWalletHistories clientWalletHistory[]
+}
+
+model orderItem {
+  id         String         @id @default(uuid())
+  orderId    String
+  quantity   Int
+  price      Float
+  order      order          @relation(fields: [orderId], references: [id])
+  materialId String
+  material   KiranaMaterial @relation(fields: [materialId], references: [id])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([orderId, materialId])
+}
+
+model clientWallet {
+  id                    String                @id @default(uuid())
+  clientId              String                @unique
+  client                client                @relation(fields: [clientId], references: [id])
+  amount                Float
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  clientWalletHistories clientWalletHistory[]
+}
+enum HistoryType {
+  DEBIT
+  CREDIT
+}
+model clientWalletHistory {
+  id             String       @id @default(uuid())
+  clientId       String
+  orderId        String?
+  type           HistoryType
+  order          order?       @relation(fields: [orderId], references: [id])
+  clientWalletId String
+  clientWallet   clientWallet @relation(fields: [clientWalletId], references: [id])
+  client         client       @relation(fields: [clientId], references: [id])
+  amount         Float
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model purchaseOrder {
+  id                String              @id @default(uuid())
+  kiranaId          String
+  kirana            kirana              @relation(fields: [kiranaId], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  purchaseOrderItem purchaseOrderItem[]
+}
+
+model purchaseOrderItem {
+  id              String         @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   purchaseOrder  @relation(fields: [purchaseOrderId], references: [id])
+  materialId      String
+  material        KiranaMaterial @relation(fields: [materialId], references: [id])
+  quantity        Int
+  price           Float
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([purchaseOrderId, materialId])
+}
