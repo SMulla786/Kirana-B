@@ -1,143 +1,183 @@
 # Project state
 
-_Last updated 2026-11-16 · Phase 0 (discovery) complete · Next: Phase 1A (see bottom)_
+_Last updated 2026-11-16 · Phase 1A (backend foundation) done, plus the `kirana-F` web shell · Next: see
+the bottom_
 
 ## Repositories
 
-| Path                       | Git                                                                                     | Contents                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `kirana/` (workspace root) | not a repo                                                                              | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`         | `main`; first commit = this import, pushed to `SMulla786/Kirana-B`                      | Backend API: the old `nk-B` code, moved here 2026-11-16      |
-| `kirana/kirana-F/`         | `main`, no commits; origin `SMulla786/kirana-F`                                         | Empty: web admin                                             |
-| `kirana/Kirana-app/`       | `main`, no commits; origin `SMulla786/Kirana-app`                                       | Empty: Android app (tech undecided, O-3)                     |
-| `kirana/Kirana-desktop/`   | `main`, no commits; origin `SMulla786/Kirana-desktop`                                   | Empty: Windows POS with offline billing                      |
+| Path                     | Git (local)                                                         | Contents                                                     |
+| ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
+| `kirana/Kirana-B/`       | `main`; `origin/main` = `d3c9a0c`; Phase 1A commits are local, **not pushed** | Backend API + project memory                       |
+| `kirana/kirana-F/`       | `main`; local commits only, **not pushed**                          | Web admin shell (React 19 + TS + Vite)                        |
+| `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
+| `kirana/Kirana-desktop/` | empty                                                               | Windows POS (waits for O-4)                                  |
 
-The old backend repo `SMulla786/kirana-backend` (2 commits, private) still exists on GitHub. The local `nk-B`
-folder, including its git data, is gone. No web, desktop or Android code exists yet. CORS origins and email
-links in the backend reference a frontend at `localhost:5173` (the Vite default) plus a devtunnels origin; no
-such code was found (O-2).
+`SMulla786/kirana-backend` (the old repo, which holds the leaked credentials) still exists on GitHub (O-1, O-17).
 
-## Baseline commit
+## Phase 1A: what was built (2026-11-16)
 
-The first commit on `Kirana-B`'s `main` is the imported old backend plus the Phase 0 docs, with secrets
-scrubbed. It includes the old backend's last staged-but-uncommitted changes, which were never pushed to
-`kirana-backend`:
+Each step is its own commit on `Kirana-B` `main`. Steps 5–8 depend on each other, so they landed together
+in one commit with their tests.
 
-- `prisma/schema.prisma`: adds `MaterialUnit.NOs`; `client.clientWallet` becomes 1:1 (`clientWallet.clientId`
-  unique); `clientWalletHistory` gains `type` (DEBIT/CREDIT), `orderId` and `clientWalletId`.
-- `src/services/kirana/order.service.ts`: create and update now run in `$transaction`; create upserts the
-  client wallet and writes a DEBIT history row for the order total.
-- `src/services/user.service.ts`, `src/controllers/user.controller.ts`: remove `createSeller`, which referenced
-  the dropped `languageId` column.
+| Commit    | Content                                                                                                     |
+| --------- | ----------------------------------------------------------------------------------------------------------- |
+| `7dcda39` | Step 1: build/boot restored (dead template exports removed, prettier fixed)                                 |
+| `11f381c` | Step 4: Vitest + supertest harness, `*_test` DB guard, `prisma db push` global setup, GitHub Actions CI, `.npmrc` |
+| `e6c9ce0` | Steps 2+9: unused S3/Cloudinary/multer/regression helpers and deps deleted; `X-Request-Id`; `GET /health`; safe error bodies |
+| `a4cfa9d` | Merge of the harness branch                                                                                 |
+| `eb3dc63` | Steps 5–8: business + store setup, session auth, roles/permissions, tenant scoping, 81 tests                |
+| (docs)    | Step 10: this file, ARCHITECTURE, DECISIONS (A-015…A-021), REPOSITORY_MAP, PHASE_PLAN, README, CLAUDE.md     |
 
-All 7 local migrations came along in `prisma/migrations/` (still gitignored), as did `node_modules/` and the
-real `.env` (both gitignored). Phase 0 added `CLAUDE.md` and `docs/*`. On 2026-11-16, before any commit,
-Claude replaced `.env.example` with placeholders and removed the hard-coded AWS key fallbacks from
-`src/utils/s3upload.ts`. Gitignored, so not in the commit: `.env`, `node_modules/`, `prisma/migrations/` and
-`package-lock.json` (the last two by owner decision, P-006).
+**Behaviour now:**
 
-## Baseline checks (2026-11-16, Node 24.21.0, npm 11.19.0, Prisma 5.22.0, TS 5.9.3)
+- **Business setup:**
+  - Self-signup: `POST /api/v1/auth/register` creates the owner user, business, default store and OWNER
+    membership in one transaction, then emails a 6-digit code.
+  - Admin onboarding: `POST /api/v1/admin/businesses` does the same with a pre-verified owner.
+  - `GET/PATCH /business` reads and updates the business profile, including an optional GSTIN.
+- **Auth:**
+  - Login uses username or email plus password.
+  - Each login creates a per-device `Session`. The access JWT lasts 15 min and the refresh token is
+    opaque, hashed and rotating; reuse is detected.
+  - Supported: logout, logout-all, list and revoke sessions, change password (other devices are signed
+    out), forgot/reset password (single-use, all sessions revoked), and resending the verification code.
+  - Rate limits on auth and email endpoints. Login errors are uniform. Responses and logs never contain
+    hashes, codes or tokens.
+- **Roles:**
+  - `Membership` with six roles and the `ROLE_PERMISSIONS` map; `requirePermission(action)` on every
+    tenant route.
+  - Members: `GET/POST /business/members`, `PATCH /business/members/:id` (role / isActive).
+  - Deactivation and role changes take effect on the next request.
+- **Tenancy:** the tenant comes from the session only (`tenantOf(req)`). Catalogue category/product CRUD
+  is mounted at `/catalog`. Client/order services are scoped but stay unrouted.
+- **Platform:**
+  - `GET /health` checks the DB.
+  - Request IDs appear in logs and in the `X-Request-Id` header.
+  - 5xx bodies are generic, and Prisma errors are mapped without values.
+  - The JSON body limit is 1 MB.
 
-| Check                  | Command                                                                       | Result                                                                  | Pre-existing? |
-| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------- |
-| Prisma schema          | `npx prisma validate`                                                         | ✅ valid                                                                | —             |
-| Generated client       | diff `node_modules/.prisma/client/schema.prisma` against `prisma/schema.prisma` | ✅ in sync with the staged schema                                       | —             |
-| Migrations vs local DB | `npx prisma migrate status`                                                   | ✅ 7 migrations, local DB `kirana` up to date                           | —             |
-| Typecheck / build      | `npx tsc --noEmit` (`npm run build` is `tsc`)                                 | ❌ 12 × TS2307 (missing template modules)                               | Yes           |
-| App module load        | `node -r ts-node/register/transpile-only -r tsconfig-paths/register -e "require('./src/app')"` with a dummy test env | ❌ `Cannot find module './admin/manager.controller'`, so the server can't start | Yes           |
-| Lint                   | `npx eslint "src/**/*.ts"`                                                    | ❌ 2 `prettier/prettier` errors                                         | Yes           |
-| Format                 | `npx prettier --check "src/**/*.ts"`                                          | ❌ `controllers/index.ts`, `validations/user.validation.ts`             | Yes           |
-| Tests                  | —                                                                             | ⚪ none exist; no runner configured                                     | —             |
-| CI                     | —                                                                             | ⚪ none (no `.github/`)                                                 | —             |
+**Web shell (`kirana-F`):**
+- **Built by:** the peer session `kirana-04`, against the API contract above.
+- **Structure:** design tokens, a UI kit (Button, TextField, Select, Table, Dialog, StatusBadge,
+  Empty/Error/Loading states), a responsive AppShell (sidebar, collapsible sidebar, drawer), and auth
+  pages (login with a business picker, register, verify, forgot/reset).
+- **Navigation:** role-aware nav driven by `me.permissions`, with a landing page per role. Catalogue,
+  Staff and Business settings show real data; the other workspaces are phase placeholders.
+- **Auth:** cookie auth with a single refresh-and-retry; no tokens in web storage. API types are written
+  by hand (P-008 is still to do).
 
-"Pre-existing" means every failure is in a file the staged diff doesn't touch; the staged diff adds no new
-typecheck or lint errors. Not run: `npm run dev`/`start` (they connect to the DB and Gmail SMTP),
-`npm run build` (writes `dist/`; the tsc result is already known), `npm audit` (network).
+## Checks (run 2026-11-16, Node 24.21, npm 11.19, Prisma 5.22, TS 5.9)
+
+| Check                         | Command (in `Kirana-B/`)                       | Result                                      |
+| ----------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| Typecheck src                 | `npx tsc --noEmit`                             | ✅ 0 errors                                  |
+| Typecheck src + tests         | `npx tsc --noEmit -p tsconfig.test.json`       | ✅ 0 errors                                  |
+| Lint (ESLint + Prettier)      | `npm run lint`                                 | ✅ clean                                     |
+| Format                        | `npx prettier --check "src/**/*.ts" "tests/**/*.ts"` | ✅ clean                              |
+| Tests                         | `npm test`                                     | ✅ 5 files, 81 tests passed (local `kirana_test`) |
+| Build                         | `npm run build`                                | ✅ (dist/ deleted afterwards)                |
+| Migrations vs dev DB          | `npx prisma migrate status`                    | ✅ 8 migrations, up to date                  |
+| CI                            | `.github/workflows/ci.yml`                     | ⚪ not run yet (nothing pushed)              |
+| kirana-F typecheck            | `npx tsc -b`                                   | ✅                                           |
+| kirana-F tests                | `npx vitest run`                               | ✅ 13 passed (the peer's commit + my proxy change) |
+| kirana-F build                | `npm run build`                                | ✅                                           |
+| Live check                    | Backend on `:4800` against `kirana_test` (NODE_ENV=test) + `npm run dev`, Chrome | ✅ register → verify → login via API; cashier lands on `/pos` with nav limited to Dashboard/POS/Catalogue/Customers; 768 and 1280 px fine. 375 px: the first run found the drawer stuck mid-slide over the menu button (a click hit Dashboard). Fixed in kirana-F `e58f246`; re-checked at a true 375x740 mobile viewport: drawer `display:none`, menu button top-left, no horizontal scroll, route stays `/pos`. |
+
+## Migrations
+
+- A new local migration, `prisma/migrations/20261116120000_phase1a_business_store_membership_session/`,
+  was created as reviewed SQL and applied to the dev DB `kirana`, which was empty (owner: throwaway).
+  - It adds the `MembershipRole` enum and the `Session`, `Membership` and `Store` tables.
+  - It adds `kirana.name`/`gstin`, defaults `amount`/`renewalAmount` to 0, makes `User.email` unique, and
+    adds the reset-token columns.
+  - It backfills existing kiranas as a default store plus an OWNER membership, and existing employees as
+    STAFF, and clears the old plaintext `User.refreshToken`.
+- ⚠ Migrations are gitignored (P-006), so this folder exists **only on this PC**. Back it up. Fresh
+  databases can be created with `prisma db push`.
+- The local `.env` value of `JWT_ACCESS_EXPIRATION_MINUTES` was changed to 15: the new config rejects
+  values over 60, and the old value was about 570 years. No other `.env` values were read or changed.
+- New optional env vars: `APP_URL` (email links) and `AUTH_RATE_LIMIT_MAX`. See `.env.example`.
 
 ## Feature status against the MVP
 
-✅ implemented · 🟡 partial · ❌ missing · ⚠️ exists but breaks a product rule · ❓ intent unknown
+✅ done · 🟡 partial · ❌ missing · ⚠️ breaks a product rule
 
-| Area                          | Status | Evidence                                                                                                                                                                                           |
-| ----------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Business setup                | 🟡⚠️   | `kirana` model (address, City, amount, renewalAmount). `services/kirana/kiranaa.service.ts#createKirana` exists but has no route. Self-registration no longer creates a `kirana` row (staged), so a self-registered KIRANA user can't log in ("Seller not found"). No Store model. |
-| Authentication                | 🟡⚠️   | `/api/v1/users/*`: register, verify-code, login, refresh, logout, change/reset password, me, update. JWT in a cookie or Bearer header. Serious defects: issues 2–7.                               |
-| Roles / permissions           | 🟡     | `Role` enum ADMIN/KIRANA/EMPLOYEE; `checkRole` middleware; `employee` linked to a kirana. No Manager/Cashier/Inventory/Accountant roles; no action-level permissions.                              |
-| Tenant isolation              | 🟡⚠️   | `verifyJWT` resolves `kiranaId` server-side (a good base). Service get/update/delete methods use `id` alone (material, category, client, order), so any route would allow cross-tenant access (IDOR). |
-| Product catalogue             | 🟡     | `KiranaMaterial` (name, unit, barcode, category; unique per kirana). Service and controller exist, **no routes**. No price, MRP, cost, tax, SKU or archive.                                        |
-| Units / conversion            | ❌⚠️   | Fixed enum `KG G PEICE L ML DOZON NOs`; the zod validator omits `NOs`; no conversion; `orderItem.quantity` is Int, so loose/weighted items can't be sold.                                          |
-| Barcodes                      | 🟡     | `@@unique([kiranaId, barcode])`; exactly one barcode per product, required. No lookup endpoint.                                                                                                     |
-| Stock ledger                  | ❌⚠️   | `KiranaMaterial.inventory` is a Float field; nothing updates it; no movements.                                                                                                                      |
-| POS / checkout / receipts     | ❌     | `order.service` create/update (staged); `order.controller.ts` is empty; no routes. No payment modes, invoice numbers, tax, discounts, receipts or held bills.                                     |
-| Sales returns                 | ❌     | —                                                                                                                                                                                                  |
-| Customer udhaar ledger        | 🟡⚠️   | `clientWallet` + `clientWalletHistory` (staged). DEBITs the full total even when paid; ignores `paid`; balance `amount` never changes; order update/delete leave the ledger stale. Float money.     |
-| Suppliers / purchasing        | ❌     | `purchaseOrder(Item)` tables only; no supplier model, no service.                                                                                                                                  |
-| Cash / expenses / shifts      | ❌     | —                                                                                                                                                                                                  |
-| Owner dashboard / reports     | ❌     | Only a platform-admin record-count dashboard (`services/admin/admin.service.ts`), not routed.                                                                                                       |
-| Web / desktop / Android apps  | ❌     | Not in the workspace (O-2).                                                                                                                                                                        |
-| Offline sync                  | ❌     | —                                                                                                                                                                                                  |
-| Security / ops / backups      | 🟡⚠️   | helmet, compression, CORS allow-list, winston, zod. No CI, Docker, health check, backups or audit log.                                                                                            |
-| Global master catalogue       | ❓     | `Material`/`MaterialCategory` + `services/admin/material.service.ts` (no controller or routes). Purpose unconfirmed (O-6).                                                                        |
+| Area                       | Status | Notes                                                                                        |
+| -------------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| Business + store setup     | ✅     | Self-signup and admin onboarding; single default store; no multi-store workflows (A-002)    |
+| Authentication / sessions  | ✅     | See above. Deferred: cashier PIN, per-account lockout                                        |
+| Roles / permissions        | ✅     | Server-enforced and tested; the UI only hides                                                |
+| Tenant isolation           | ✅     | Catalogue, business and members are tested cross-tenant; order/client services scoped, unrouted |
+| Web admin shell            | 🟡     | Built; mobile verified; restyle to A-022 in progress; no i18n yet (O-9)                      |
+| Desktop POS shell          | ❌     | Waits for O-4 (Electron and hardware)                                                         |
+| Android shell              | ❌     | Phase 8 (O-3)                                                                                |
+| Catalogue / units / stock  | 🟡⚠️   | Basic tenant-scoped CRUD only. Hard delete; `inventory` Float; enum units → Phase 2           |
+| Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
+| OpenAPI contract (P-008)   | ❌     | Swagger UI exists with no annotations; kirana-F types are hand-written                        |
 
-## Known issues (ranked)
+## Known gaps and risks
 
-**Critical: fix before any deployment or pilot**
+1. **Leaked credentials (owner):** rotate the AWS key and Gmail app password, and archive or delete
+   `kirana-backend` (O-1, O-17).
+2. **Nothing is pushed:** `Kirana-B` and `kirana-F` commits are local only, so CI has never run on GitHub.
+   Pushing needs the owner's go-ahead.
+3. **Migrations exist only on this PC** (P-006). Back up `prisma/migrations/`.
+4. **kirana-F:**
+   - The mobile drawer is fixed and verified (`e58f246`).
+   - The restyle to the owner's chosen look (A-022, GeoSales reference), using the installed UI
+     skills, is in progress in the peer session. Check its commit.
+   - Still missing: ESLint in kirana-F and page-level tests. "Log out" wraps at 375 px.
+5. **Auth hardening still open:**
+   - Rate limits use an in-memory, per-IP store, which needs a shared store with more than one instance.
+   - No per-account lockout.
+   - Refresh tokens are also returned in the login body for web clients, so XSS could read them; the
+     only client affected is web.
+   - Sessions have a fixed 30-day lifetime and no cleanup job.
+   - The verify-code attempt counter is IP-limited only.
+6. **Legacy leftovers:**
+   - The `User.refreshToken` column and the `employee` table are unused, as are `User.role`
+     KIRANA/EMPLOYEE, which are labels only.
+   - `addMember` always creates a new login; adding an existing user to a second business isn't
+     supported.
+7. **Old sales/udhaar design** (Float money, mutable orders, required customer, trusted client totals):
+   unrouted, to be retired in Phases 4–5 (P-011).
+8. **Hygiene:**
+   - `package.json` `name`/`repository` still point to the old template.
+   - `updateRoleToAdmin` points at a wrong path.
+   - `prisma:reset` uses `--force`.
+   - `prepare: husky` runs without a `.husky/` folder; use `HUSKY=0 npm install`.
+   - `@types/express` is v4.
+   - Catering fields remain in `client.validation`; the `Gender` enum is unused.
+9. **Email delivery** was never tested against real SMTP; tests use `jsonTransport`.
 
-1. **Leaked credentials.** The git history of the old repo `kirana-backend` holds what look like a real AWS
-   access key and secret and a Gmail SMTP app password (in `.env.example`, plus an AWS fallback in
-   `src/utils/s3upload.ts`). Both were scrubbed in `Kirana-B` on 2026-11-16 before any commit, but the old
-   repo still has them. The owner must revoke and rotate them (O-1) and archive or delete
-   `kirana-backend` (O-17). Values are deliberately not repeated in these docs.
-2. **Privilege escalation.** Public `POST /api/v1/users/register` accepts `role`
-   (`registerUserSchema.role` in `validations/user.validation.ts`), so anyone can register as ADMIN.
-3. **The register response leaks the whole user row** (`registerUser` returns `createdUser`), including the
-   bcrypt hash and `verifyCode`, which defeats email verification. It is also `console.log`ged.
-4. **Token design.** Access and refresh tokens share one secret, and the refresh token `{id}` passes
-   `verifyJWT`, so a 30-day refresh token works as an access token. The local `.env` access TTL is
-   300,000,000 minutes (about 570 years). Refresh tokens are stored in plaintext, and `/refresh` sits behind
-   `verifyJWT`.
-5. **Password reset** emails an ordinary access token (huge TTL, reusable, in the URL), and `/reset-password`
-   accepts any valid token rather than a single-use reset token.
-6. **No effective rate limiting.** `authLimiter` is mounted on `/v1/auth` (no such route) and only in
-   production. The 6-digit verify code comes from `Math.random` and can be brute-forced.
-7. **Account enumeration.** Login returns 404 "User does not exist" vs 401 for a wrong password.
-8. **Cross-tenant IDOR** in the kirana services (see the table). `categoryId`/`materialId` values in request
-   bodies aren't checked against the tenant.
+## Manual verification
 
-**High: data integrity**
+1. Run the backend:
+   - `cd Kirana-B && HUSKY=0 npm install && npm test`.
+   - Then `npm run dev` with a real `.env`: SMTP, `APP_URL`, and `JWT_ACCESS_EXPIRATION_MINUTES` ≤ 60.
+2. `curl localhost:$PORT/health` should return `{"status":"ok","db":"up"}`.
+3. Run the web shell:
+   - `cd kirana-F && npm install && API_PROXY_TARGET=http://localhost:$PORT npm run dev`.
+   - Open `http://localhost:5173`.
+4. Walk through the flows:
+   - Register a business, then enter the emailed code at `/verify`.
+   - Log in: the owner lands on `/dashboard` with the full nav.
+   - Staff → add a cashier, then log in as the cashier: they land on `/pos` with a reduced nav, and
+     catalogue edits are rejected by the API (403).
+5. Check the layout at 375, 768 and 1280 px widths.
 
-9. Money is stored as `Float` (`order`, `orderItem`, `purchaseOrderItem`, `clientWallet*`), while
-   `kirana.amount` is `Decimal(65,30)`.
-10. Sales are mutable (`updateOrder` deletes and recreates lines) and hard-deletable (`deleteOrder`, which
-    also fails on FK RESTRICT when lines exist). The udhaar ledger diverges after an update.
-11. Every sale requires a customer with a phone number (`createOrderSchema.client`), so walk-in sales are
-    impossible.
-12. Prices and totals from the client are trusted; `totalPrice` overrides the line sum.
+## Next action
 
-**Build and hygiene**
-
-13. Build and boot are broken by dead template exports in `controllers/index.ts`, `services/admin/index.ts`
-    and `routes/admin/index.ts`.
-14. `prisma/migrations` and `package-lock.json` are gitignored, so schema history and installs can't be
-    reproduced from git. The owner chose to keep it that way for now (P-006).
-15. Template leftovers: `package.json` `repository` points to a Catering-Backend repo;
-    `PROJECT_NAME='template-backend'`; S3 bucket `promoteindiawamess`; unused S3 and Cloudinary helpers;
-    `utils/calculations.ts` (linear regression with `console.log`); unused `Gender` enum;
-    `UserProfile.studentId`; catering fields (`isVegetarian`, `isJain`, `caste`) in
-    `client.validation.updateClientSchema`; empty `utils/helper.ts`, `client.controller.ts` and
-    `order.controller.ts`.
-16. `@types/express` v4 with Express 5; `prepare: husky` but no `.husky/` directory; the `updateRoleToAdmin`
-    script points at a non-existent `src/cli/*.js`; the `prisma:reset` script uses `--force` (dangerous).
-17. The error handler returns raw Prisma messages, which can echo submitted values.
-18. Empty README; no tests, CI, Dockerfile or health endpoint.
-
-## Next action: Phase 1A (backend foundation)
-
-**Owner prerequisites (Claude can't do these):**
-
-- Revoke and rotate the leaked AWS key and Gmail app password (O-1); archive or delete `kirana-backend` (O-17).
-- Keep a backup of `Kirana-B/prisma/migrations/`. It isn't in git (P-006), so this PC holds the only copy.
-
-**Then:** open a fresh Claude Code chat in this workspace, paste the blueprint's Phase 1 prompt, and add:
-_"Implement Phase 1A only, as defined in docs/PHASE_PLAN.md."_ The first step is the behaviour-neutral
-build/boot fix (issue 13), so every later step can be verified by typecheck, lint and tests.
+1. **Owner:**
+   - Review the local commits in `Kirana-B` and `kirana-F`, then say whether to push (CI then runs on
+     GitHub).
+   - Rotate the credentials (O-1).
+   - Back up the migrations.
+   - Answer O-4 (desktop: Electron plus target hardware) and O-9 (languages).
+2. **Then, in a fresh chat: Phase 1B remainder.** Paste the Phase 1 prompt and add:
+   _"Implement the Phase 1B remainder only, as defined in docs/PHASE_PLAN.md."_ That covers:
+   - verify the kirana-F mobile fix
+   - the OpenAPI spec from zod plus a generated kirana-F client (P-008)
+   - the `Kirana-desktop` placeholder shell, if O-4 is answered
+3. After that, **Phase 2 (catalogue, units, barcodes, stock ledger)**. Decide O-6 and O-15 first.

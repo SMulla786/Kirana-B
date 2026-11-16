@@ -1,36 +1,64 @@
 # Architecture
 
-## 1. Current architecture (as built, 2026-11-16)
+## 1. Current architecture (as built, Phase 1A, 2026-11-16)
 
 ```
-Client apps: none in the workspace (a Vite app on :5173 is implied by CORS/email links)
-   │  JSON over HTTP; JWT in an httpOnly cookie or Authorization: Bearer
+Client apps: kirana-F web admin shell (Vite, :5173; Phase 1A/1B). Desktop and Android: not yet.
+   │  JSON over HTTP. Web: httpOnly SameSite=Strict cookies. Desktop/Android: Authorization: Bearer.
    ▼
 Express 5 (src/app.ts)
-   helmet → json/urlencoded (16 MB) → static /public → cookieParser → compression → CORS allow-list → morgan
-   /api/v1 → routes/index.ts → /users   (the only mounted router)
-   /api-docs (swagger-jsdoc; no annotations yet) · GET / welcome
-   notFoundHandler → errorConverter (Zod / Prisma / ApiError) → errorHandler (ApiResponse JSON)
+   requestId → helmet → json/urlencoded (1 MB) → static /public → cookieParser → compression → CORS
+   allow-list → morgan ([request-id] in each line)
+   GET /health (DB ping) · /api/v1 → routes/index.ts → /auth /business /catalog /admin · /api-docs
+   notFoundHandler → errorConverter (Zod / Prisma / body-parser / ApiError) → errorHandler (ApiResponse JSON;
+   5xx bodies are generic, and the cause is logged with the request id)
    ▼
-controllers (zod parse, catchAsync) → services (logic + Prisma) → PrismaClient singleton (src/client.ts)
+routes (verifyJWT → requirePermission('<action>')) → controllers (zod .strict() parse, tenantOf(req))
+   → services (Prisma, ApiError) → PrismaClient singleton (src/client.ts)
    ▼
-PostgreSQL (local DB `kirana`; Prisma 5.22; 7 migrations, gitignored)
+PostgreSQL (dev DB `kirana` via local migrations; test DB `kirana_test` via `prisma db push`)
 
-Side integrations: SMTP via nodemailer (verify code, password reset). S3 and Cloudinary helpers exist but nothing uses them.
+Side integrations: SMTP via nodemailer (verification code, reset link). In tests it uses jsonTransport.
 ```
 
-- **Runtime:** Node (24.21 locally; no engines pin), TypeScript 5.9 `strict`, CommonJS, target ES6.
-  Dev: `ts-node-dev` + `tsconfig-paths`. Prod: `tsc` → `dist/` + `module-alias`.
-- **Config:** zod-validated env in `src/config/config.ts`. AWS, Cloudinary and `BCRYPT_SALT_ROUNDS` are read
-  straight from `process.env`, outside the schema.
-- **Logging:** winston to the console, plus morgan. No correlation IDs, no structured JSON.
-- **Auth flow:** register (emails a 6-digit code) → `verify-code` → login (username or email + password) →
-  HS256 access + refresh JWTs (one secret), set as cookies and returned in the body → `verifyJWT` loads the
-  user and resolves `kiranaId`/`employeeId` by role → `checkRole(...)`.
-- **Tenancy:** implicit. `kirana` is the tenant and tenant tables carry `kiranaId`. `req.user.kiranaId` is set
-  server-side, but by-id service methods ignore it.
-- **Deployment:** none defined (no Dockerfile, CI or infrastructure scripts).
-- **Model details:** see `REPOSITORY_MAP.md`.
+- **Runtime:** Node 24, TypeScript 5.9 `strict`, CommonJS. Dev uses `ts-node-dev` + `tsconfig-paths`; prod uses
+  `tsc` → `dist/` + `module-alias`.
+- **Config:** zod-validated env in `src/config/config.ts`. The access TTL is capped at 60 min, and
+  production requires a JWT secret of ≥32 characters. `APP_URL` builds email links (no caller-supplied
+  redirect); `AUTH_RATE_LIMIT_MAX` sets the auth limit.
+- **Identity:**
+  - `User` is a login. `User.role` is only meaningful for the platform `ADMIN`; KIRANA and EMPLOYEE
+    are legacy labels.
+  - Business access is `Membership(userId, kiranaId, role)`, with roles OWNER, MANAGER, CASHIER,
+    INVENTORY_MANAGER, ACCOUNTANT and STAFF.
+  - The legacy `employee` table is unused.
+- **Sessions:**
+  - Login creates a `Session` row per device (user, kiranaId, storeId, device name, user agent, IP,
+    expiry, revokedAt).
+  - The access token is a 15-minute HS256 JWT `{sub, sid, typ:'access'}`.
+  - The refresh token is opaque, `<sessionId>.<secret>`, with only `sha256(secret)` stored. It rotates
+    via compare-and-swap, and reusing a rotated token revokes the session.
+  - `verifyJWT` loads the session on every request, so revocation, deactivation and role changes take
+    effect immediately.
+  - Logout revokes the session from its refresh token. Logout-all, per-session revoke, password change
+    (which keeps the current session) and password reset (which revokes all sessions) are supported.
+- **Business setup:** `businessService.createBusinessWithOwner` creates the user, the business
+  (`kirana`), the default `Store` and the OWNER `Membership` in one transaction. It is used by
+  self-signup (`/auth/register`, email verified by a 6-digit CSPRNG code) and by platform admins
+  (`/admin/businesses`, pre-verified).
+- **Tenancy:**
+  - `req.user.kiranaId`/`storeId` come only from the session row. Controllers read them via
+    `tenantOf(req)`.
+  - Services filter every read and write by `{id, kiranaId}`, and referenced ids (`categoryId`,
+    `materialId`) are checked against the tenant.
+  - Body schemas are `.strict()`.
+  - Covered by cross-tenant tests (`tests/tenancy.test.ts`).
+- **Authorization:** `requirePermission(action)` checks the code-defined `ROLE_PERMISSIONS` map. Member
+  management follows `canAssignRole`: only OWNER grants MANAGER, nobody grants OWNER, and nobody edits
+  their own membership.
+- **Mounted business routes:** only the catalogue (categories, products), kept as the isolation-test
+  vehicle. The order/client services are tenant-scoped but stay unrouted until Phases 4–5 (P-011).
+- **Deployment:** none yet. CI is `.github/workflows/ci.yml`.
 
 ## 2. Gap analysis
 

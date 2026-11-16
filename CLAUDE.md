@@ -4,8 +4,9 @@ KiranaOS is an Indian kirana/grocery retail operating system (web admin, Windows
 This repo (`Kirana-B`, remote `github.com/SMulla786/Kirana-B`) is the backend API (Node/Express/Prisma/
 PostgreSQL) and holds the project memory for all repos. On 2026-11-16 the owner moved the old backend here
 (the `nk-B` folder, remote `kirana-backend`) as files only, without git history. The first commit on `main` is that import plus the Phase 0 docs.
-Reuse or change the old code as needed; it isn't sacred. Client repos are separate and still empty:
-`kirana-F` (web admin), `Kirana-app` (Android), `Kirana-desktop` (Windows POS) (DECISIONS A-013).
+Reuse or change the old code as needed; it isn't sacred. Client repos are separate (DECISIONS A-013):
+`kirana-F` (web admin shell, React + Vite, built in Phase 1A/1B), `Kirana-app` (Android, empty) and
+`Kirana-desktop` (Windows POS, empty).
 
 ## Read first in every new chat
 
@@ -18,16 +19,19 @@ Full phase prompts: `../KiranaOS_Development_Blueprint.pdf` (outside git, in the
 
 ## Commands (run from `Kirana-B/`)
 
-| Purpose          | Command                                                     | Baseline 2026-11-16                     |
+| Purpose          | Command                                                     | Result 2026-11-16 (Phase 1A)            |
 | ---------------- | ----------------------------------------------------------- | --------------------------------------- |
-| Dev server       | `npm run dev` (ts-node-dev, loads `.env`)                   | Crashes on boot: missing template files |
-| Build            | `npm run build` (= `tsc`)                                   | Fails: 12 × TS2307                      |
-| Typecheck        | `npx tsc --noEmit`                                          | Same 12 errors                          |
-| Lint             | `npm run lint`                                              | 2 prettier errors                       |
-| Format check     | `npx prettier --check "src/**/*.ts"`                        | 2 files                                 |
-| Prisma (safe)    | `npx prisma validate`, `npx prisma migrate status`          | OK; local DB `kirana` up to date        |
+| Install          | `HUSKY=0 npm install` (`.npmrc` allows Prisma's scripts)    | OK                                      |
+| Dev server       | `npm run dev` (ts-node-dev, loads `.env`)                   | Boots; `GET /health`                    |
+| Build            | `npm run build` (= `tsc`)                                   | OK                                      |
+| Typecheck        | `npx tsc --noEmit` and `npx tsc --noEmit -p tsconfig.test.json` | 0 errors                            |
+| Lint + format    | `npm run lint` (ESLint + Prettier, src + tests)             | Clean                                   |
+| Tests            | `npm test` (Vitest + supertest, real Postgres `*_test` DB)  | 81 passed                               |
+| Prisma (safe)    | `npx prisma validate`, `npx prisma migrate status`          | OK; 8 migrations, dev DB up to date     |
 | Prisma client    | `npm run prisma:generate`                                   | In sync                                 |
-| Tests            | none yet — Phase 1A adds a runner and `npm test`            | —                                       |
+
+Tests derive their DB from `.env`'s `DATABASE_URL` with the name swapped to `kirana_test` (or
+`TEST_DATABASE_URL`), refuse any name that doesn't end in `_test`, and never wipe data; use unique names.
 
 ## Safety rules
 
@@ -52,8 +56,13 @@ Full phase prompts: `../KiranaOS_Development_Blueprint.pdf` (outside git, in the
 - Path aliases `@services/* @controllers/* @validations/* @utils/* @config/* @middlewares/*`: tsconfig
   `paths` (dev) and `_moduleAliases` → `dist/` in package.json (`npm start`). Add new aliases to both.
 - Prettier: 4-space indent, single quotes, no bracket spacing (`{a}`), trailing commas, width 100.
-- `verifyJWT` sets `req.user` including `kiranaId` resolved server-side from the DB. Take the tenant from
-  `req.user`, never from body/params/query.
+- `verifyJWT` checks the access token against a live `Session` and sets `req.user` (incl. `kiranaId`,
+  `storeId`, `membershipRole` from the session/membership). In tenant controllers use `tenantOf(req)`;
+  never take the tenant from body/params/query. Body schemas are `.strict()`.
+- Guard every tenant route with `requirePermission('<action>')`; actions and role grants live in
+  `src/config/permissions.ts` (add new actions there, never check role names in routes).
+- New business-owned tables get `kiranaId` (and `storeId` when store-owned); services filter by
+  `{id, kiranaId}` and check referenced ids belong to the tenant; add a cross-tenant test.
 
 ## Domain vocabulary (current code → product term)
 

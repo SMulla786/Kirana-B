@@ -7,8 +7,8 @@ Each phase runs in a fresh Claude Code chat, using that phase's prompt from
 | #   | Phase                                                                                      | Depends on                  | Status                 |
 | --- | ------------------------------------------------------------------------------------------ | --------------------------- | ---------------------- |
 | 0   | Discovery and baseline                                                                     | —                           | ✅ Done 2026-11-16     |
-| 1A  | Backend foundation: build fix, test harness, auth security, business + store, roles, tenancy | 0 + owner prerequisites     | ⏭ Next                 |
-| 1B  | Client foundation: `kirana-F` web admin shell, design tokens, desktop POS placeholder shell | 1A; O-4, O-9                | Not started            |
+| 1A  | Backend foundation: build fix, test harness, auth security, business + store, roles, tenancy | 0 + owner prerequisites     | ✅ Done 2026-11-16 (local, not pushed) |
+| 1B  | Client foundation: `kirana-F` web admin shell, design tokens, desktop POS placeholder shell | 1A; O-4, O-9                | 🟡 Web shell built with 1A; remainder ⏭ Next |
 | 2   | Catalogue, units, barcodes, stock ledger                                                   | 1A (1B for screens)         | Not started            |
 | 3   | Desktop hybrid POS: search, scanning, cart, held bills                                     | 1B, 2                       | Not started            |
 | 4   | Checkout, payments, invoices, receipt printing, returns                                    | 3; O-8, O-10                | Not started            |
@@ -26,8 +26,11 @@ waits for Phase 9, once sale/payment/stock/ledger contracts are stable.
 ## Phase 1A — Backend foundation
 
 Use the blueprint's Phase 1 prompt and limit it to this list. Steps are in order; commit each separately.
-Work in `Kirana-B`. Ideally its first commit (the imported old backend, unchanged) exists before step 1, so
-every step is a reviewable diff.
+Work in `Kirana-B`. Its first commit (`d3c9a0c`, the imported old backend plus Phase 0 docs) is on
+`origin/main`, so every step below is a reviewable diff on top of it.
+
+_Done 2026-11-16. Commits and results are in PROJECT_STATE. Steps 5–8 landed as one commit because
+they depend on each other._
 
 1. **Restore build and boot (behaviour-neutral):** remove the dead exports/routes in `controllers/index.ts`,
    `services/admin/index.ts` and `routes/admin/index.ts`; fix the 2 prettier errors. `tsc`, lint and app
@@ -60,6 +63,15 @@ Business B data even with guessed IDs (tested); role restrictions are enforced a
 build, lint and tests pass in CI; no secrets in the repo.
 
 ## Phase 1B — Client foundation
+
+**Status 2026-11-16:** the owner chose to build the `kirana-F` web shell alongside 1A (A-020), and it
+exists as local commits. **Remainder:**
+1. Verify the 375 px drawer and route-on-resize fix.
+2. Add ESLint and page-level tests to kirana-F.
+3. Generate the OpenAPI spec from zod in Kirana-B, and a typed kirana-F client from it (P-008). This
+   replaces `src/api/types.ts`.
+4. Add i18n scaffolding once O-9 is answered.
+5. Build the `Kirana-desktop` placeholder shell once O-4 is answered.
 
 Settle O-4 and O-9, then clone the client repos next to the backend. In `kirana-F`, build the web
 admin shell (React + TS + Vite, P-009): login, business setup, role-aware navigation, design tokens,
