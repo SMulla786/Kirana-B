@@ -23,6 +23,42 @@
       }
     },
     "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number"
+          },
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "statusCode",
+          "status",
+          "message"
+        ]
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "ADMIN",
+          "KIRANA",
+          "EMPLOYEE"
+        ]
+      },
       "Me": {
         "type": "object",
         "properties": {
@@ -46,7 +82,7 @@
                 "type": "string"
               },
               "role": {
-                "type": "string"
+                "$ref": "#/components/schemas/UserRole"
               }
             },
             "required": [
@@ -146,6 +182,51 @@
           "refreshToken",
           "refreshTokenExpiresAt",
           "me"
+        ]
+      },
+      "BusinessChoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "SelectBusiness": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number"
+          },
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessChoice"
+            }
+          }
+        },
+        "required": [
+          "statusCode",
+          "status",
+          "message",
+          "errors"
         ]
       },
       "Profile": {
@@ -412,7 +493,9 @@
             "type": "string"
           },
           "inventory": {
-            "type": "number"
+            "type": "number",
+            "description": "Legacy Float field, replaced by the Phase 2 stock ledger. Do not use.",
+            "deprecated": true
           },
           "createdAt": {
             "type": "string",
@@ -654,32 +737,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -761,32 +819,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -863,32 +896,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -979,32 +987,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Email not verified, account disabled or no access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Several businesses: resend with kiranaId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectBusiness"
                 }
               }
             }
@@ -1097,32 +1110,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1243,32 +1231,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1349,32 +1312,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1438,32 +1376,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1473,32 +1386,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1587,32 +1475,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1622,32 +1485,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1736,32 +1574,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1771,32 +1584,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1859,32 +1647,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1894,32 +1657,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1986,32 +1724,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2021,32 +1734,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2120,32 +1808,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2155,32 +1818,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2245,32 +1883,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2280,32 +1893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2315,32 +1903,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2436,32 +1999,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2471,32 +2009,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2506,32 +2019,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2599,32 +2087,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2634,32 +2097,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2669,32 +2107,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2817,32 +2230,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2852,32 +2240,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2887,32 +2250,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3015,32 +2353,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3050,32 +2363,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3085,32 +2373,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3178,32 +2441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3213,32 +2451,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3248,32 +2461,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3357,32 +2545,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3392,32 +2555,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3427,32 +2565,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3528,32 +2641,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3563,32 +2651,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3598,32 +2661,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3718,32 +2756,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3753,32 +2766,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3788,32 +2776,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3887,32 +2850,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3922,32 +2860,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3957,32 +2870,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4050,32 +2938,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4085,32 +2948,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4120,32 +2958,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4253,32 +3066,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4288,32 +3076,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4323,32 +3086,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4424,32 +3162,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4459,32 +3172,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4494,32 +3182,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4632,32 +3295,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4667,32 +3305,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4702,32 +3315,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4801,32 +3389,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4836,32 +3399,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4871,32 +3409,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4963,32 +3476,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4998,32 +3486,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -5225,32 +3688,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -5260,32 +3698,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

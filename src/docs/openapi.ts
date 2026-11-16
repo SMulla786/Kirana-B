@@ -4,7 +4,7 @@ import {
     OpenAPIRegistry,
     OpenApiGeneratorV3,
 } from '@asteasolutions/zod-to-openapi';
-import {MaterialUnit, MembershipRole} from '@prisma/client';
+import {MaterialUnit, MembershipRole, Role} from '@prisma/client';
 import {
     userValidation,
     businessValidation,
@@ -49,7 +49,7 @@ const Me = z
             email: z.string(),
             fullname: z.string(),
             phoneNumber: z.string(),
-            role: z.string(),
+            role: z.nativeEnum(Role).openapi('UserRole'),
         }),
         business: idRef.nullable(),
         store: idRef.nullable(),
@@ -129,7 +129,10 @@ const Product = z
         categoryId: id,
         kiranaId: id,
         barcode: z.string(),
-        inventory: z.number(),
+        inventory: z.number().openapi({
+            deprecated: true,
+            description: 'Legacy Float field, replaced by the Phase 2 stock ledger. Do not use.',
+        }),
         createdAt: date,
         updatedAt: date,
     })
@@ -144,6 +147,10 @@ const NewBusiness = z.object({
 const idParams = z.object({id: commonValidation.idSchema});
 const json = <T extends z.ZodTypeAny>(schema: T) => ({content: {'application/json': {schema}}});
 const NoData = envelope(z.unknown().optional());
+const ErrorResponse = NoData.openapi('ErrorResponse');
+// 409 from login when the user belongs to several businesses and sent no kiranaId.
+const BusinessChoice = idRef.openapi('BusinessChoice');
+const SelectBusiness = NoData.extend({errors: z.array(BusinessChoice)}).openapi('SelectBusiness');
 
 type Method = 'get' | 'post' | 'patch' | 'delete';
 type Op = {
@@ -157,6 +164,7 @@ type Op = {
     params?: z.AnyZodObject;
     data?: z.ZodTypeAny; // omit for an empty data field
     status?: number;
+    extraResponses?: Record<number, {description: string; schema: z.ZodTypeAny}>;
 };
 
 const route = (op: Op) => {
@@ -175,9 +183,17 @@ const route = (op: Op) => {
         },
         responses: {
             [ok]: {description: 'Success', ...json(op.data ? envelope(op.data) : NoData)},
-            ...(authed || op.body ? {400: {description: 'Validation error', ...json(NoData)}} : {}),
-            ...(authed ? {401: {description: 'Not authenticated', ...json(NoData)}} : {}),
-            ...(op.permission ? {403: {description: 'Forbidden', ...json(NoData)}} : {}),
+            ...(authed || op.body
+                ? {400: {description: 'Validation error', ...json(ErrorResponse)}}
+                : {}),
+            ...(authed ? {401: {description: 'Not authenticated', ...json(ErrorResponse)}} : {}),
+            ...(op.permission ? {403: {description: 'Forbidden', ...json(ErrorResponse)}} : {}),
+            ...Object.fromEntries(
+                Object.entries(op.extraResponses ?? {}).map(([code, r]) => [
+                    code,
+                    {description: r.description, ...json(r.schema)},
+                ]),
+            ),
         },
     });
 };
@@ -211,6 +227,14 @@ pub('post', '/auth/resend-code', 'Resend the verification code', {body: resendCo
 pub('post', '/auth/login', 'Log in; sets httpOnly cookies and returns tokens', {
     body: loginSchema,
     data: LoginData,
+    extraResponses: {
+        401: {description: 'Invalid credentials', schema: ErrorResponse},
+        403: {
+            description: 'Email not verified, account disabled or no access',
+            schema: ErrorResponse,
+        },
+        409: {description: 'Several businesses: resend with kiranaId', schema: SelectBusiness},
+    },
 });
 pub('post', '/auth/refresh', 'Rotate the refresh token (cookie or body)', {
     body: z.object({refreshToken: z.string().optional()}),
