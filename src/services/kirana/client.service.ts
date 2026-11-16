@@ -13,6 +13,31 @@ class clientService {
         });
         return client;
     }
+    public searchCustomers(kiranaId: string, q?: string) {
+        return prisma.client.findMany({
+            where: {
+                kiranaId,
+                ...(q
+                    ? {
+                          OR: [
+                              {name: {contains: q, mode: 'insensitive'}},
+                              {phoneNumber: {contains: q}},
+                          ],
+                      }
+                    : {}),
+            },
+            select: {id: true, name: true, phoneNumber: true},
+            orderBy: {name: 'asc'},
+            take: 20,
+        });
+    }
+    // A duplicate phone in the business hits the unique index and maps to 409.
+    public createCustomer(kiranaId: string, data: {name: string; phoneNumber: string}) {
+        return prisma.client.create({
+            data: {...data, address: '', kiranaId},
+            select: {id: true, name: true, phoneNumber: true},
+        });
+    }
     public async updateClient(kiranaId: string, id: string, data: registerClientData) {
         await this.guard(kiranaId, id);
         const client = await prisma.client.update({

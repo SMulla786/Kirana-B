@@ -24,6 +24,12 @@ const queryClientsSchema = z.object({
     searchTerm: z.string().optional(),
 });
 
+// Point-of-sale customers: minimal context for a bill (Phase 5 builds the real customer work).
+const customerQuerySchema = z.object({q: z.string().trim().max(100).optional()});
+const createCustomerSchema = z
+    .object({name: z.string().trim().min(1).max(100), phoneNumber: phoneNumberSchema})
+    .strict();
+
 const getClientByIdSchema = z.object({
     id: idSchema,
 });
@@ -39,6 +45,8 @@ const updateClientSchema = userBaseSchema
 
 export default {
     registerClientSchema,
+    customerQuerySchema,
+    createCustomerSchema,
     queryClientsSchema,
     getClientByIdSchema,
     updateClientSchema,

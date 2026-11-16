@@ -1,0 +1,208 @@
+import {describe, expect, it} from 'vitest';
+import {api, bearer, createMember, createOwner, prisma, uniqueName, uniquePhone} from './helpers';
+
+const HELD = '/api/v1/pos/held';
+
+type Body = Record<string, unknown>;
+
+const createProduct = async (token: string, overrides: Body = {}) => {
+    const res = await api
+        .post('/api/v1/catalog/products')
+        .set(bearer(token))
+        .send({name: uniqueName('prod'), baseUnit: 'PIECE', sellingPrice: '45.00', ...overrides})
+        .expect(201);
+    return res.body.data as {id: string; name: string};
+};
+
+const hold = (token: string, body: Body) => api.post(HELD).set(bearer(token)).send(body);
+const line = (productId: string, extra: Body = {}) => ({
+    productId,
+    unit: 'PIECE',
+    quantity: 2,
+    ...extra,
+});
+
+describe('held bills', () => {
+    it('holds, lists and recalls once; the second recall is 404', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token);
+        const customer = await api
+            .post('/api/v1/customers')
+            .set(bearer(token))
+            .send({name: 'Asha', phoneNumber: uniquePhone()})
+            .expect(201);
+        const held = await hold(token, {
+            customerId: customer.body.data.id,
+            note: 'back soon',
+            lines: [line(p.id)],
+        }).expect(201);
+        expect(held.body.data).toMatchObject({
+            note: 'back soon',
+            customer: {name: 'Asha'},
+            subtotal: '90.00',
+            discountTotal: '0.00',
+            total: '90.00',
+            lines: [
+                {
+                    productName: p.name,
+                    unit: 'PIECE',
+                    factor: '1',
+                    quantity: '2.000',
+                    unitPrice: '45.00',
+                    discount: '0.00',
+                    lineTotal: '90.00',
+                },
+            ],
+        });
+        const id = held.body.data.id as string;
+
+        const list = await api.get(HELD).set(bearer(token)).expect(200);
+        expect(list.body.data).toEqual([
+            expect.objectContaining({
+                id,
+                note: 'back soon',
+                customer: {id: customer.body.data.id, name: 'Asha'},
+                lineCount: 1,
+                total: '90.00',
+                createdBy: {id: expect.any(String), fullname: 'Test Owner'},
+            }),
+        ]);
+
+        const recalled = await api.post(`${HELD}/${id}/recall`).set(bearer(token)).expect(200);
+        expect(recalled.body.data).toEqual(held.body.data);
+        await api.post(`${HELD}/${id}/recall`).set(bearer(token)).expect(404);
+        expect((await api.get(HELD).set(bearer(token))).body.data).toEqual([]);
+    });
+
+    it('snapshots the server price per unit; a different client price needs permission', async () => {
+        const owner = await createOwner();
+        const cashier = await createMember(owner.token, 'CASHIER');
+        const p = await createProduct(owner.token, {units: [{unit: 'PACKET', factor: 12}]});
+
+        const res = await hold(cashier.token, {
+            lines: [line(p.id, {unit: 'PACKET', quantity: 2})],
+        }).expect(201);
+        expect(res.body.data.lines[0]).toMatchObject({unitPrice: '540.00', lineTotal: '1080.00'});
+
+        // The catalogue price may be sent back unchanged; a different one needs the permission.
+        await hold(cashier.token, {lines: [line(p.id, {unitPrice: '45.00'})]}).expect(201);
+        await hold(cashier.token, {lines: [line(p.id, {unitPrice: '40.00'})]}).expect(403);
+    });
+
+    it('lets only roles with the permission discount or override the price', async () => {
+        const owner = await createOwner();
+        const cashier = await createMember(owner.token, 'CASHIER');
+        const manager = await createMember(owner.token, 'MANAGER');
+        const p = await createProduct(owner.token);
+
+        await hold(cashier.token, {lines: [line(p.id, {discount: '5.00'})]}).expect(403);
+        await hold(cashier.token, {lines: [line(p.id, {unitPrice: '30.00'})]}).expect(403);
+        await hold(cashier.token, {lines: [line(p.id, {discount: '0'})]}).expect(201);
+
+        const res = await hold(manager.token, {
+            lines: [line(p.id, {unitPrice: '30.00', discount: '5.00'})],
+        }).expect(201);
+        expect(res.body.data).toMatchObject({
+            subtotal: '60.00',
+            discountTotal: '5.00',
+            total: '55.00',
+        });
+        await hold(manager.token, {lines: [line(p.id, {discount: '90.01'})]}).expect(400);
+    });
+
+    it('rejects bad units, fractional counts, missing prices and bad line counts', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token);
+        const noPrice = await createProduct(token, {sellingPrice: null});
+
+        await hold(token, {lines: [line(p.id, {unit: 'KILOGRAM'})]}).expect(400);
+        await hold(token, {lines: [line(p.id, {unit: 'PACKET'})]}).expect(400);
+        await hold(token, {lines: [line(p.id, {quantity: 1.5})]}).expect(400);
+        await hold(token, {lines: [line(noPrice.id)]}).expect(400);
+        await hold(token, {lines: [line(noPrice.id, {unitPrice: '10.00'})]}).expect(201);
+        await hold(token, {lines: []}).expect(400);
+        await hold(token, {lines: Array.from({length: 201}, () => line(p.id))}).expect(400);
+        await hold(token, {lines: [line(p.id)], extra: 1}).expect(400);
+        await hold(token, {lines: Array.from({length: 200}, () => line(p.id))}).expect(201);
+    });
+
+    it('computes exact decimal totals with half-up rounding', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token, {baseUnit: 'KILOGRAM', sellingPrice: '99.99'});
+        const res = await hold(token, {
+            lines: [
+                {productId: p.id, unit: 'KILOGRAM', quantity: '0.333', discount: '1.25'},
+                {productId: p.id, unit: 'KILOGRAM', quantity: '0.005'},
+            ],
+        }).expect(201);
+        // 0.333 x 99.99 = 33.29667 -> 33.30; 0.005 x 99.99 = 0.49995 -> 0.50
+        expect(res.body.data.lines.map((l: {lineTotal: string}) => l.lineTotal)).toEqual([
+            '32.05',
+            '0.50',
+        ]);
+        expect(res.body.data).toMatchObject({
+            subtotal: '33.80',
+            discountTotal: '1.25',
+            total: '32.55',
+        });
+        await hold(token, {
+            lines: [{productId: p.id, unit: 'KILOGRAM', quantity: '0.3333'}],
+        }).expect(400);
+    });
+
+    it('never touches stock, orders or wallets', async () => {
+        const {token, kiranaId} = await createOwner();
+        const p = await createProduct(token);
+        await api
+            .post('/api/v1/stock/movements')
+            .set(bearer(token))
+            .send({productId: p.id, type: 'OPENING', quantity: 10})
+            .expect(201);
+        const customer = await prisma.client.create({
+            data: {name: 'W', address: '', phoneNumber: uniquePhone(), kiranaId},
+        });
+        await prisma.clientWallet.create({data: {clientId: customer.id, amount: 100}});
+
+        const snapshot = async () => ({
+            moves: await prisma.stockMovement.count({where: {product: {kiranaId}}}),
+            balances: await prisma.stockBalance.findMany({where: {productId: p.id}}),
+            orders: await prisma.order.count({where: {kiranaId}}),
+            wallet: await prisma.clientWallet.findUnique({where: {clientId: customer.id}}),
+            history: await prisma.clientWalletHistory.count({where: {clientId: customer.id}}),
+        });
+        const before = await snapshot();
+        const res = await hold(token, {customerId: customer.id, lines: [line(p.id)]}).expect(201);
+        await api.post(`${HELD}/${res.body.data.id}/recall`).set(bearer(token)).expect(200);
+        await hold(token, {customerId: customer.id, lines: [line(p.id)]}).expect(201);
+        expect(await snapshot()).toEqual(before);
+
+        const prod = await api.get(`/api/v1/catalog/products/${p.id}`).set(bearer(token));
+        expect(prod.body.data.stock.quantity).toBe('10.000');
+    });
+
+    it('keeps one business out of the held bills, products and customers of another', async () => {
+        const a = await createOwner();
+        const b = await createOwner();
+        const p = await createProduct(a.token);
+        const pb = await createProduct(b.token);
+        const customer = await api
+            .post('/api/v1/customers')
+            .set(bearer(a.token))
+            .send({name: 'Mine', phoneNumber: uniquePhone()})
+            .expect(201);
+        const held = await hold(a.token, {lines: [line(p.id)]}).expect(201);
+
+        expect((await api.get(HELD).set(bearer(b.token)).expect(200)).body.data).toEqual([]);
+        await api.post(`${HELD}/${held.body.data.id}/recall`).set(bearer(b.token)).expect(404);
+        await hold(b.token, {lines: [line(p.id)]}).expect(404);
+        await hold(b.token, {customerId: customer.body.data.id, lines: [line(pb.id)]}).expect(404);
+        // Still there for its owner.
+        await api.post(`${HELD}/${held.body.data.id}/recall`).set(bearer(a.token)).expect(200);
+    });
+
+    it('needs pos.use', async () => {
+        const owner = await createOwner();
+        const staff = await createMember(owner.token, 'STAFF');
+        await api.get(HELD).set(bearer(staff.token)).expect(403);
+    });
+});
