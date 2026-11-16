@@ -11,6 +11,8 @@ export const PERMISSIONS = [
     'catalog.cost.view', // purchase cost and stock valuation
     'stock.manage',
     'pos.use',
+    'pos.discount', // give a line discount
+    'pos.price.override', // sell at a price other than the catalogue's
     'customers.manage',
     'purchases.manage',
     'reports.view',

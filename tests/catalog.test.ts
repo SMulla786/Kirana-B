@@ -328,3 +328,35 @@ describe('catalogue permissions', () => {
         expect(res.body.data.purchaseCost).toBe('7.00');
     });
 });
+
+describe('catalogue favourites and brand search', () => {
+    it('filters favourites and matches q against the brand name', async () => {
+        const {token} = await createOwner();
+        const brandName = uniqueName('Brand');
+        const brand = await api
+            .post(`${CAT}/brands`)
+            .set(bearer(token))
+            .send({name: brandName})
+            .expect(201);
+        const fav = await createProduct(token, {brandId: brand.body.data.id});
+        const plain = await createProduct(token);
+        expect(fav.isFavourite).toBe(false);
+        await api
+            .patch(`${CAT}/products/${fav.id}`)
+            .set(bearer(token))
+            .send({isFavourite: true})
+            .expect(200);
+
+        const favs = await api.get(`${CAT}/products?favourite=true`).set(bearer(token)).expect(200);
+        expect(favs.body.data.items.map((p: {id: string}) => p.id)).toEqual([fav.id]);
+        expect(favs.body.data.items[0].isFavourite).toBe(true);
+
+        const byBrand = await api
+            .get(`${CAT}/products?q=${brandName.toLowerCase()}`)
+            .set(bearer(token))
+            .expect(200);
+        const ids = byBrand.body.data.items.map((p: {id: string}) => p.id);
+        expect(ids).toEqual([fav.id]);
+        expect(ids).not.toContain(plain.id);
+    });
+});

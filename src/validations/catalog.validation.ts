@@ -48,6 +48,7 @@ const productFields = {
         .optional(),
     gstRate: decimal({dp: 2, min: 0, max: 100}).nullable().optional(),
     priceIncludesTax: z.boolean().optional(),
+    isFavourite: z.boolean().optional(),
     lowStockThreshold: decimal({dp: 3, min: 0}).nullable().optional(),
 };
 
@@ -72,6 +73,7 @@ const productQuerySchema = z.object({
     categoryId: id.optional(),
     brandId: id.optional(),
     lowStock: z.enum(['true', 'false']).optional(),
+    favourite: z.enum(['true', 'false']).optional(),
     ...page,
 });
 

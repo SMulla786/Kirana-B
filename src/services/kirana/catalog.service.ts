@@ -61,6 +61,7 @@ export const serializeProduct = (p: ProductRow, canSeeCost: boolean) => {
         hsnCode: p.hsnCode,
         gstRate: fixed(p.gstRate, 2),
         priceIncludesTax: p.priceIncludesTax,
+        isFavourite: p.isFavourite,
         lowStockThreshold: fixed(p.lowStockThreshold, 3),
         stock: {
             quantity: qty.toFixed(3),
@@ -258,6 +259,7 @@ export const createProductIn = async (db: Db, ctx: CatalogContext, data: CreateP
             kiranaId: ctx.kiranaId,
             name: data.name,
             sku: data.sku ?? null,
+            isFavourite: data.isFavourite ?? false,
             categoryId: data.categoryId ?? null,
             brandId: data.brandId ?? null,
             baseUnit: data.baseUnit,
@@ -330,6 +332,7 @@ class CatalogService {
             ...(query.status !== 'ALL' ? {status: query.status} : {}),
             ...(query.categoryId ? {categoryId: query.categoryId} : {}),
             ...(query.brandId ? {brandId: query.brandId} : {}),
+            ...(query.favourite === 'true' ? {isFavourite: true} : {}),
         };
         if (query.q) {
             const code = query.q.replace(/\s+/g, '');
@@ -337,6 +340,7 @@ class CatalogService {
                 {name: {contains: query.q, mode: 'insensitive'}},
                 {aliases: {some: {alias: {contains: query.q, mode: 'insensitive'}}}},
                 {sku: {equals: query.q, mode: 'insensitive'}},
+                {brand: {name: {contains: query.q, mode: 'insensitive'}}},
                 {barcodes: {some: {code}}},
             ];
         }

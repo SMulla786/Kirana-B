@@ -91,6 +91,7 @@ model User {
   sessions               Session[]
   stockMovements         StockMovement[]
   priceChanges           ProductPriceChange[]
+  heldBills              HeldBill[]
 }
 
 /// One login session per device. The refresh token is opaque; only its SHA-256 hash is stored.
@@ -140,6 +141,7 @@ model Store {
   kirana         kirana          @relation(fields: [kiranaId], references: [id])
   stockMovements StockMovement[]
   stockBalances  StockBalance[]
+  heldBills      HeldBill[]
 
   @@index([kiranaId])
 }
@@ -166,6 +168,7 @@ model kirana {
   stores           Store[]
   memberships      Membership[]
   brands           Brand[]
+  heldBills        HeldBill[]
 }
 
 model employee {
@@ -236,6 +239,7 @@ model KiranaMaterial {
   hsnCode           String?
   gstRate           Decimal?                @db.Decimal(5, 2)
   priceIncludesTax  Boolean                 @default(true)
+  isFavourite       Boolean                 @default(false)
   lowStockThreshold Decimal?                @db.Decimal(14, 3)
   kirana            kirana                  @relation(fields: [kiranaId], references: [id])
   category          KiranaMaterialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
@@ -364,6 +368,7 @@ model client {
   order               order[]
   clientWallet        clientWallet?
   clientWalletHistory clientWalletHistory[]
+  heldBills           HeldBill[]
 
   @@unique([kiranaId, phoneNumber])
 }
@@ -446,4 +451,22 @@ model purchaseOrderItem {
   updatedAt       DateTime       @updatedAt
 
   @@unique([purchaseOrderId, materialId])
+}
+
+/// A parked POS cart. A draft snapshot, never a sale: it writes no stock, order or revenue rows.
+model HeldBill {
+  id          String   @id @default(uuid())
+  kiranaId    String
+  storeId     String
+  createdById String
+  customerId  String?
+  note        String?
+  lines       Json
+  createdAt   DateTime @default(now())
+  kirana      kirana   @relation(fields: [kiranaId], references: [id])
+  store       Store    @relation(fields: [storeId], references: [id])
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  customer    client?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([kiranaId, storeId, createdAt])
 }
