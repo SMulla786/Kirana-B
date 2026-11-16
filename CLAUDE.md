@@ -86,6 +86,27 @@ customer udhaar ledger · `purchaseOrder` = purchase · `Material`/`MaterialCate
 - INR defaults; GST is configurable per business and never assumed.
 - Role/permission checks are enforced in backend routes/services, not only in UI.
 
+## UI design rules (all client apps: kirana-F, Kirana-desktop, Kirana-app)
+
+- **Look:** follow DECISIONS A-022 (the GeoSales-style dark charcoal theme with a lime accent and card
+  KPIs).
+- **Accessibility:** contrast ≥4.5:1, visible focus, 44px targets, and colour is never the only signal.
+- **No fake numbers:** placeholders never show invented figures.
+- **Use the owner's installed UI skills** (Skill tool) at the matching step, and name the ones used in
+  the phase report. Give delegated agents the same instruction.
+  1. `pick-ui-library`: before adding any UI dependency.
+  2. `frontend-design`: aesthetic direction per screen.
+  3. `prototype`: when the direction is unclear, build variants for the owner to pick from.
+  4. `emil-design-eng` + `apple-design`: polish and interaction feel.
+  5. `dataviz`: charts, KPIs, stat tiles.
+  6. `mobile-native`: every web screen at phone widths.
+  7. `animate`, `find-animation-opportunities`, `improve-animations`, `review-animations`,
+     `animation-performance`, `animation-vocabulary`: motion.
+  8. `ask-sonner`: toasts.
+  9. `break-ui`: worst-case data stress test before a screen is done.
+  10. `animate-expo` (React Native) or `kotlinsense` (Kotlin): Android.
+- **Missing skills:** if a skill isn't loaded in the session, say so rather than skipping silently.
+
 ## End of every phase
 
 Update `docs/PROJECT_STATE.md` (scope done, files changed, migrations, commands with real results, gaps,
