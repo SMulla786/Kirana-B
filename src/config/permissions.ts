@@ -8,6 +8,7 @@ export const PERMISSIONS = [
     'members.manage',
     'catalog.read',
     'catalog.manage',
+    'catalog.cost.view', // purchase cost and stock valuation
     'stock.manage',
     'pos.use',
     'customers.manage',
@@ -28,10 +29,18 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
         'business.read',
         'catalog.read',
         'catalog.manage',
+        'catalog.cost.view',
         'stock.manage',
         'purchases.manage',
     ],
-    ACCOUNTANT: ['business.read', 'members.read', 'catalog.read', 'reports.view', 'finance.view'],
+    ACCOUNTANT: [
+        'business.read',
+        'members.read',
+        'catalog.read',
+        'catalog.cost.view',
+        'reports.view',
+        'finance.view',
+    ],
     STAFF: ['business.read', 'catalog.read'],
 };
 

@@ -4,11 +4,11 @@ import {
     OpenAPIRegistry,
     OpenApiGeneratorV3,
 } from '@asteasolutions/zod-to-openapi';
-import {MaterialUnit, MembershipRole, Role} from '@prisma/client';
+import {MembershipRole, ProductStatus, Role, StockMovementType, UnitCode} from '@prisma/client';
 import {
     userValidation,
     businessValidation,
-    materialValidation,
+    catalogValidation,
     commonValidation,
 } from '@validations/index';
 
@@ -121,22 +121,103 @@ const Member = z
 const Category = z
     .object({id, name: z.string(), kiranaId: id, createdAt: date, updatedAt: date})
     .openapi('Category');
+const Brand = z
+    .object({id, name: z.string(), kiranaId: id, createdAt: date, updatedAt: date})
+    .openapi('Brand');
+const unitCode = z.nativeEnum(UnitCode).openapi('UnitCode');
+const money = z.string().openapi({example: '45.00', description: 'Decimal, 2 places'});
+const qty = z.string().openapi({example: '12.000', description: 'Decimal, 3 places, base unit'});
 const Product = z
     .object({
         id,
         name: z.string(),
-        unit: z.nativeEnum(MaterialUnit),
-        categoryId: id,
-        kiranaId: id,
-        barcode: z.string(),
-        inventory: z.number().openapi({
-            deprecated: true,
-            description: 'Legacy Float field, replaced by the Phase 2 stock ledger. Do not use.',
+        sku: z.string().nullable(),
+        status: z.nativeEnum(ProductStatus).openapi('ProductStatus'),
+        categoryId: id.nullable(),
+        category: idRef.nullable(),
+        brandId: id.nullable(),
+        brand: idRef.nullable(),
+        baseUnit: unitCode,
+        salesUnit: unitCode,
+        purchaseUnit: unitCode,
+        isLoose: z.boolean().openapi({description: 'Mass/volume base: fractional quantities'}),
+        units: z.array(
+            z.object({
+                unit: unitCode,
+                factor: z.string().openapi({description: 'Base units in one of this unit'}),
+            }),
+        ),
+        barcodes: z.array(z.object({code: z.string(), unit: unitCode})),
+        aliases: z.array(z.string()),
+        sellingPrice: money.nullable().openapi({description: 'Per sales unit'}),
+        mrp: money.nullable().openapi({description: 'Per sales unit'}),
+        purchaseCost: money.nullable().optional().openapi({
+            description: 'Per purchase unit. Absent without the catalog.cost.view permission.',
         }),
+        hsnCode: z.string().nullable(),
+        gstRate: money.nullable(),
+        priceIncludesTax: z.boolean(),
+        lowStockThreshold: qty.nullable(),
+        stock: z.object({quantity: qty, isLow: z.boolean()}),
         createdAt: date,
         updatedAt: date,
     })
     .openapi('Product');
+const pageOf = <T extends z.ZodTypeAny>(item: T) =>
+    z.object({
+        items: z.array(item),
+        total: z.number().int(),
+        page: z.number().int(),
+        pageSize: z.number().int(),
+    });
+const PriceChange = z
+    .object({
+        id,
+        salesUnit: unitCode,
+        sellingPrice: money.nullable(),
+        mrp: money.nullable(),
+        purchaseUnit: unitCode,
+        purchaseCost: money.nullable().optional(),
+        hsnCode: z.string().nullable(),
+        gstRate: money.nullable(),
+        priceIncludesTax: z.boolean(),
+        effectiveFrom: date,
+        changedBy: z.object({id, fullname: z.string()}),
+    })
+    .openapi('PriceChange');
+const Lookup = z.object({product: Product, unit: unitCode, factor: z.string()}).openapi('Lookup');
+const ImportReport = z
+    .object({
+        valid: z.boolean(),
+        rows: z.array(
+            z.object({
+                row: z.number().int(),
+                name: z.string(),
+                errors: z.array(z.object({field: z.string(), message: z.string()})),
+            }),
+        ),
+        newCategories: z.array(z.string()),
+        newBrands: z.array(z.string()),
+        created: z.number().int(),
+    })
+    .openapi('ImportReport');
+const Movement = z
+    .object({
+        id,
+        productId: id,
+        product: z.object({id, name: z.string(), baseUnit: unitCode}),
+        type: z.nativeEnum(StockMovementType).openapi('StockMovementType'),
+        quantity: qty.openapi({description: 'Signed, base unit'}),
+        balanceAfter: qty,
+        enteredQuantity: qty,
+        enteredUnit: unitCode,
+        unitCost: money.nullable().optional(),
+        reason: z.string().nullable(),
+        reference: z.string().nullable(),
+        actor: z.object({id, fullname: z.string()}),
+        createdAt: date,
+    })
+    .openapi('StockMovement');
 const Health = z.object({status: z.string(), db: z.string()});
 const NewBusiness = z.object({
     business: idRef,
@@ -162,6 +243,7 @@ type Op = {
     authenticated?: boolean;
     body?: z.ZodTypeAny;
     params?: z.AnyZodObject;
+    query?: z.AnyZodObject;
     data?: z.ZodTypeAny; // omit for an empty data field
     status?: number;
     extraResponses?: Record<number, {description: string; schema: z.ZodTypeAny}>;
@@ -179,6 +261,7 @@ const route = (op: Op) => {
         security: authed ? [{bearer: []}, {cookie: []}] : undefined,
         request: {
             ...(op.params ? {params: op.params} : {}),
+            ...(op.query ? {query: op.query} : {}),
             ...(op.body ? {body: {required: true, ...json(op.body)}} : {}),
         },
         responses: {
@@ -209,7 +292,7 @@ const {
     updateMeSchema,
 } = userValidation;
 const {updateBusinessSchema, addMemberSchema, updateMemberSchema} = businessValidation;
-const {materialSchema, materialCategorySchema, updateMaterialSchema} = materialValidation;
+const cv = catalogValidation;
 
 // Health sits outside /api/v1; buildOpenApiDocument() overrides its server.
 route({method: 'get', path: '/health', tag: 'System', summary: 'Health check', data: Health});
@@ -279,44 +362,112 @@ biz('patch', '/business/members/{id}', 'Update a member', 'members.manage', {
 // Catalog
 const cat = (m: Method, path: string, summary: string, permission: string, rest: Partial<Op>) =>
     route({method: m, path, tag: 'Catalog', summary, permission, ...rest});
-cat('get', '/catalog/categories', 'List categories', 'catalog.read', {data: z.array(Category)});
-cat('post', '/catalog/categories', 'Create a category', 'catalog.manage', {
-    body: materialCategorySchema,
-    status: 201,
-    data: Category,
-});
+const conflict = {409: {description: 'Duplicate name, SKU or barcode', schema: ErrorResponse}};
+for (const [path, label, schema] of [
+    ['/catalog/categories', 'category', Category],
+    ['/catalog/brands', 'brand', Brand],
+] as const) {
+    cat('get', path, `List ${label}s`, 'catalog.read', {data: z.array(schema)});
+    cat('post', path, `Create a ${label}`, 'catalog.manage', {
+        body: cv.namedSchema,
+        status: 201,
+        data: schema,
+    });
+    cat('patch', `${path}/{id}`, `Rename a ${label}`, 'catalog.manage', {
+        params: idParams,
+        body: cv.namedSchema,
+        data: schema,
+    });
+    cat('delete', `${path}/{id}`, `Delete an unused ${label}`, 'catalog.manage', {
+        params: idParams,
+        data: schema,
+        extraResponses: {409: {description: 'In use by products', schema: ErrorResponse}},
+    });
+}
 cat('get', '/catalog/categories/{id}', 'Get a category', 'catalog.read', {
     params: idParams,
     data: Category,
 });
-cat('patch', '/catalog/categories/{id}', 'Update a category', 'catalog.manage', {
-    params: idParams,
-    body: materialCategorySchema,
-    data: Category,
+cat('get', '/catalog/products', 'Search and list products', 'catalog.read', {
+    query: cv.productQuerySchema,
+    data: pageOf(Product),
 });
-cat('delete', '/catalog/categories/{id}', 'Delete a category', 'catalog.manage', {
-    params: idParams,
-    data: Category,
-});
-cat('get', '/catalog/products', 'List products', 'catalog.read', {data: z.array(Product)});
 cat('post', '/catalog/products', 'Create a product', 'catalog.manage', {
-    body: materialSchema,
+    body: cv.createProductSchema,
     status: 201,
     data: Product,
+    extraResponses: conflict,
 });
 cat('get', '/catalog/products/{id}', 'Get a product', 'catalog.read', {
     params: idParams,
     data: Product,
 });
-cat('patch', '/catalog/products/{id}', 'Update a product', 'catalog.manage', {
-    params: idParams,
-    body: updateMaterialSchema,
-    data: Product,
+cat(
+    'patch',
+    '/catalog/products/{id}',
+    'Update or archive a product (base unit is fixed)',
+    'catalog.manage',
+    {
+        params: idParams,
+        body: cv.updateProductSchema,
+        data: Product,
+        extraResponses: conflict,
+    },
+);
+cat(
+    'get',
+    '/catalog/products/{id}/prices',
+    'Price, cost and tax history, newest first',
+    'catalog.read',
+    {
+        params: idParams,
+        data: z.array(PriceChange),
+    },
+);
+cat('get', '/catalog/lookup', 'Find an active product by barcode, then SKU', 'catalog.read', {
+    query: cv.lookupQuerySchema,
+    data: Lookup,
 });
-cat('delete', '/catalog/products/{id}', 'Delete a product', 'catalog.manage', {
-    params: idParams,
-    data: Product,
+cat(
+    'post',
+    '/catalog/import',
+    'Import products from CSV rows (dry run or all-or-nothing commit)',
+    'catalog.manage',
+    {
+        body: cv.importSchema,
+        data: ImportReport,
+        extraResponses: {
+            201: {description: 'Imported', schema: envelope(ImportReport)},
+            422: {description: 'Rows have errors; nothing was imported', schema: ErrorResponse},
+        },
+    },
+);
+
+// Stock ledger
+const stock = (m: Method, path: string, summary: string, permission: string, rest: Partial<Op>) =>
+    route({method: m, path, tag: 'Stock', summary, permission, ...rest});
+stock('get', '/stock/movements', 'Stock movement history for the session store', 'catalog.read', {
+    query: cv.movementQuerySchema,
+    data: pageOf(Movement),
 });
+stock(
+    'post',
+    '/stock/movements',
+    'Record opening stock, damage, expiry or an adjustment',
+    'stock.manage',
+    {
+        body: cv.createMovementSchema,
+        status: 201,
+        data: Movement,
+        extraResponses: {
+            200: {description: 'Idempotency key replayed', schema: envelope(Movement)},
+            409: {
+                description: 'Insufficient stock or opening already recorded',
+                schema: ErrorResponse,
+            },
+        },
+    },
+);
 
 // Platform admin (role ADMIN, no tenant permission)
 const adm = (m: Method, path: string, summary: string, rest: Partial<Op>) =>

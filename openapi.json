@@ -459,7 +459,7 @@
           "updatedAt"
         ]
       },
-      "Product": {
+      "Brand": {
         "type": "object",
         "properties": {
           "id": {
@@ -469,33 +469,9 @@
           "name": {
             "type": "string"
           },
-          "unit": {
-            "type": "string",
-            "enum": [
-              "KG",
-              "G",
-              "PEICE",
-              "L",
-              "ML",
-              "DOZON",
-              "NOs"
-            ]
-          },
-          "categoryId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "kiranaId": {
             "type": "string",
             "format": "uuid"
-          },
-          "barcode": {
-            "type": "string"
-          },
-          "inventory": {
-            "type": "number",
-            "description": "Legacy Float field, replaced by the Phase 2 stock ledger. Do not use.",
-            "deprecated": true
           },
           "createdAt": {
             "type": "string",
@@ -509,13 +485,515 @@
         "required": [
           "id",
           "name",
-          "unit",
-          "categoryId",
           "kiranaId",
-          "barcode",
-          "inventory",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "ProductStatus": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "ARCHIVED"
+        ]
+      },
+      "UnitCode": {
+        "type": "string",
+        "enum": [
+          "PIECE",
+          "PACKET",
+          "BOX",
+          "CARTON",
+          "GRAM",
+          "KILOGRAM",
+          "MILLILITRE",
+          "LITRE"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProductStatus"
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "category": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "brandId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "brand": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "baseUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "salesUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "purchaseUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "isLoose": {
+            "type": "boolean",
+            "description": "Mass/volume base: fractional quantities"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "$ref": "#/components/schemas/UnitCode"
+                },
+                "factor": {
+                  "type": "string",
+                  "description": "Base units in one of this unit"
+                }
+              },
+              "required": [
+                "unit",
+                "factor"
+              ]
+            }
+          },
+          "barcodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "unit": {
+                  "$ref": "#/components/schemas/UnitCode"
+                }
+              },
+              "required": [
+                "code",
+                "unit"
+              ]
+            }
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sellingPrice": {
+            "type": "string",
+            "nullable": true,
+            "description": "Per sales unit",
+            "example": "45.00"
+          },
+          "mrp": {
+            "type": "string",
+            "nullable": true,
+            "description": "Per sales unit",
+            "example": "45.00"
+          },
+          "purchaseCost": {
+            "type": "string",
+            "nullable": true,
+            "description": "Per purchase unit. Absent without the catalog.cost.view permission.",
+            "example": "45.00"
+          },
+          "hsnCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "gstRate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "priceIncludesTax": {
+            "type": "boolean"
+          },
+          "lowStockThreshold": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 3 places, base unit",
+            "example": "12.000"
+          },
+          "stock": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": "string",
+                "description": "Decimal, 3 places, base unit",
+                "example": "12.000"
+              },
+              "isLow": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "quantity",
+              "isLow"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sku",
+          "status",
+          "categoryId",
+          "category",
+          "brandId",
+          "brand",
+          "baseUnit",
+          "salesUnit",
+          "purchaseUnit",
+          "isLoose",
+          "units",
+          "barcodes",
+          "aliases",
+          "sellingPrice",
+          "mrp",
+          "hsnCode",
+          "gstRate",
+          "priceIncludesTax",
+          "lowStockThreshold",
+          "stock",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PriceChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "salesUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "sellingPrice": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "mrp": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "purchaseUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "purchaseCost": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "hsnCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "gstRate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "priceIncludesTax": {
+            "type": "boolean"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changedBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "salesUnit",
+          "sellingPrice",
+          "mrp",
+          "purchaseUnit",
+          "hsnCode",
+          "gstRate",
+          "priceIncludesTax",
+          "effectiveFrom",
+          "changedBy"
+        ]
+      },
+      "Lookup": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "factor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "unit",
+          "factor"
+        ]
+      },
+      "ImportReport": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "row",
+                "name",
+                "errors"
+              ]
+            }
+          },
+          "newCategories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "newBrands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "valid",
+          "rows",
+          "newCategories",
+          "newBrands",
+          "created"
+        ]
+      },
+      "StockMovementType": {
+        "type": "string",
+        "enum": [
+          "OPENING",
+          "PURCHASE_RECEIPT",
+          "SALE",
+          "SALE_RETURN",
+          "PURCHASE_RETURN",
+          "DAMAGE",
+          "EXPIRY",
+          "ADJUSTMENT"
+        ]
+      },
+      "StockMovement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "baseUnit": {
+                "$ref": "#/components/schemas/UnitCode"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "baseUnit"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/StockMovementType"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "Signed, base unit",
+            "example": "12.000"
+          },
+          "balanceAfter": {
+            "type": "string",
+            "description": "Decimal, 3 places, base unit",
+            "example": "12.000"
+          },
+          "enteredQuantity": {
+            "type": "string",
+            "description": "Decimal, 3 places, base unit",
+            "example": "12.000"
+          },
+          "enteredUnit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "unitCost": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "product",
+          "type",
+          "quantity",
+          "balanceAfter",
+          "enteredQuantity",
+          "enteredUnit",
+          "reason",
+          "reference",
+          "actor",
+          "createdAt"
         ]
       }
     },
@@ -2386,7 +2864,7 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "List categories",
+        "summary": "List categorys",
         "description": "Requires permission `catalog.read`.",
         "security": [
           {
@@ -2574,105 +3052,11 @@
       }
     },
     "/catalog/categories/{id}": {
-      "get": {
-        "tags": [
-          "Catalog"
-        ],
-        "summary": "Get a category",
-        "description": "Requires permission `catalog.read`.",
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statusCode": {
-                      "type": "number"
-                    },
-                    "status": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Category"
-                    },
-                    "errors": {
-                      "type": "array",
-                      "items": {
-                        "nullable": true
-                      }
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "status",
-                    "message",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "patch": {
         "tags": [
           "Catalog"
         ],
-        "summary": "Update a category",
+        "summary": "Rename a category",
         "description": "Requires permission `catalog.manage`.",
         "security": [
           {
@@ -2787,8 +3171,112 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "Delete a category",
+        "summary": "Delete an unused category",
         "description": "Requires permission `catalog.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Category"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "In use by products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Get a category",
+        "description": "Requires permission `catalog.read`.",
         "security": [
           {
             "bearer": []
@@ -2878,12 +3366,12 @@
         }
       }
     },
-    "/catalog/products": {
+    "/catalog/brands": {
       "get": {
         "tags": [
           "Catalog"
         ],
-        "summary": "List products",
+        "summary": "List brands",
         "description": "Requires permission `catalog.read`.",
         "security": [
           {
@@ -2913,8 +3401,517 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/Product"
+                        "$ref": "#/components/schemas/Brand"
                       }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Create a brand",
+        "description": "Requires permission `catalog.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Brand"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/brands/{id}": {
+      "patch": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Rename a brand",
+        "description": "Requires permission `catalog.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Brand"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Delete an unused brand",
+        "description": "Requires permission `catalog.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Brand"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "In use by products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/products": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Search and list products",
+        "description": "Requires permission `catalog.read`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "ARCHIVED",
+                "ALL"
+              ],
+              "default": "ACTIVE"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "categoryId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "lowStock",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Product"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "pageSize"
+                      ]
                     },
                     "errors": {
                       "type": "array",
@@ -2991,33 +3988,162 @@
                     "minLength": 1,
                     "maxLength": 100
                   },
-                  "unit": {
+                  "sku": {
                     "type": "string",
-                    "enum": [
-                      "KG",
-                      "G",
-                      "PEICE",
-                      "L",
-                      "ML",
-                      "DOZON",
-                      "NOs"
-                    ]
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
                   },
                   "categoryId": {
                     "type": "string",
+                    "nullable": true,
                     "format": "uuid"
                   },
-                  "barcode": {
+                  "brandId": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "salesUnit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
+                  },
+                  "purchaseUnit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
+                  },
+                  "units": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        },
+                        "factor": {
+                          "type": "string",
+                          "example": "12.50"
+                        }
+                      },
+                      "required": [
+                        "unit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 7
+                  },
+                  "barcodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 20
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 20
+                  },
+                  "sellingPrice": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "mrp": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "purchaseCost": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "hsnCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d{4,8}$"
+                  },
+                  "gstRate": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "priceIncludesTax": {
+                    "type": "boolean"
+                  },
+                  "lowStockThreshold": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "baseUnit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
                   }
                 },
                 "required": [
                   "name",
-                  "unit",
-                  "categoryId",
-                  "barcode"
+                  "baseUnit"
                 ],
                 "additionalProperties": false
               }
@@ -3083,6 +4209,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate name, SKU or barcode",
             "content": {
               "application/json": {
                 "schema": {
@@ -3193,7 +4329,7 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "Update a product",
+        "summary": "Update or archive a product (base unit is fixed)",
         "description": "Requires permission `catalog.manage`.",
         "security": [
           {
@@ -3226,26 +4362,151 @@
                     "minLength": 1,
                     "maxLength": 100
                   },
-                  "unit": {
+                  "sku": {
                     "type": "string",
-                    "enum": [
-                      "KG",
-                      "G",
-                      "PEICE",
-                      "L",
-                      "ML",
-                      "DOZON",
-                      "NOs"
-                    ]
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
                   },
                   "categoryId": {
                     "type": "string",
+                    "nullable": true,
                     "format": "uuid"
                   },
-                  "barcode": {
+                  "brandId": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "salesUnit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
+                  },
+                  "purchaseUnit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
+                  },
+                  "units": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        },
+                        "factor": {
+                          "type": "string",
+                          "example": "12.50"
+                        }
+                      },
+                      "required": [
+                        "unit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 7
+                  },
+                  "barcodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 20
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 20
+                  },
+                  "sellingPrice": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "mrp": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "purchaseCost": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "hsnCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d{4,8}$"
+                  },
+                  "gstRate": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "priceIncludesTax": {
+                    "type": "boolean"
+                  },
+                  "lowStockThreshold": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "ARCHIVED"
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -3319,15 +4580,27 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Duplicate name, SKU or barcode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
-      },
-      "delete": {
+      }
+    },
+    "/catalog/products/{id}/prices": {
+      "get": {
         "tags": [
           "Catalog"
         ],
-        "summary": "Delete a product",
-        "description": "Requires permission `catalog.manage`.",
+        "summary": "Price, cost and tax history, newest first",
+        "description": "Requires permission `catalog.read`.",
         "security": [
           {
             "bearer": []
@@ -3365,7 +4638,10 @@
                       "type": "string"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/Product"
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PriceChange"
+                      }
                     },
                     "errors": {
                       "type": "array",
@@ -3406,6 +4682,671 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/lookup": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Find an active product by barcode, then SKU",
+        "description": "Requires permission `catalog.read`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "code",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Lookup"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/import": {
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Import products from CSV rows (dry run or all-or-nothing commit)",
+        "description": "Requires permission `catalog.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "category": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "brand": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "sku": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "barcodes": {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        "baseUnit": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "sellingPrice": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "mrp": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "purchaseCost": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "hsnCode": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "gstRate": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "lowStockThreshold": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "openingStock": {
+                          "type": "string",
+                          "maxLength": 200
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "rows",
+                  "dryRun"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportReport"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportReport"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Rows have errors; nothing was imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stock/movements": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Stock movement history for the session store",
+        "description": "Requires permission `catalog.read`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "productId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPENING",
+                "PURCHASE_RECEIPT",
+                "SALE",
+                "SALE_RETURN",
+                "PURCHASE_RETURN",
+                "DAMAGE",
+                "EXPIRY",
+                "ADJUSTMENT"
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StockMovement"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "pageSize"
+                      ]
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Record opening stock, damage, expiry or an adjustment",
+        "description": "Requires permission `stock.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "OPENING",
+                      "DAMAGE",
+                      "EXPIRY",
+                      "ADJUSTMENT"
+                    ]
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "PIECE",
+                      "PACKET",
+                      "BOX",
+                      "CARTON",
+                      "GRAM",
+                      "KILOGRAM",
+                      "MILLILITRE",
+                      "LITRE"
+                    ]
+                  },
+                  "unitCost": {
+                    "type": "string",
+                    "example": "12.50"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "productId",
+                  "type",
+                  "quantity"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StockMovement"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StockMovement"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Insufficient stock or opening already recorded",
             "content": {
               "application/json": {
                 "schema": {

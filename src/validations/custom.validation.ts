@@ -1,4 +1,8 @@
 import {z} from 'zod';
+import {extendZodWithOpenApi} from '@asteasolutions/zod-to-openapi';
+import {Prisma} from '@prisma/client';
+
+extendZodWithOpenApi(z);
 
 // bcrypt only uses the first 72 bytes, so longer passwords are rejected rather than truncated.
 const password = z
@@ -28,4 +32,45 @@ const gstinSchema = z
     .toUpperCase()
     .regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'Invalid GSTIN format');
 
-export {password, emailSchema, usernameSchema, fullnameSchema, phoneNumberSchema, gstinSchema};
+/**
+ * A decimal from a JSON number or string, parsed exactly (no float maths). `0.1` stays 0.1; values
+ * with more than `dp` decimals are rejected, never rounded.
+ */
+const decimal = (opts: {dp: number; min?: number; max?: number; positive?: boolean}) =>
+    z
+        .union([z.number().finite(), z.string().trim().min(1)])
+        .transform((value, ctx) => {
+            const text = String(value);
+            if (!/^-?\d{1,12}(\.\d+)?$/.test(text)) {
+                ctx.addIssue({code: 'custom', message: 'Must be a decimal number'});
+                return z.NEVER;
+            }
+            const d = new Prisma.Decimal(text);
+            const fail = (message: string) => {
+                ctx.addIssue({code: 'custom', message});
+                return z.NEVER;
+            };
+            if (d.decimalPlaces() > opts.dp) return fail(`At most ${opts.dp} decimals`);
+            if (opts.positive && d.lte(0)) return fail('Must be greater than 0');
+            if (opts.min !== undefined && d.lt(opts.min))
+                return fail(`Must be at least ${opts.min}`);
+            if (opts.max !== undefined && d.gt(opts.max))
+                return fail(`Must be at most ${opts.max}`);
+            return d;
+        })
+        .openapi({type: 'string', example: '12.50'});
+
+const money = () => decimal({dp: 2, min: 0});
+const quantity = () => decimal({dp: 3});
+
+export {
+    password,
+    emailSchema,
+    usernameSchema,
+    fullnameSchema,
+    phoneNumberSchema,
+    gstinSchema,
+    decimal,
+    money,
+    quantity,
+};

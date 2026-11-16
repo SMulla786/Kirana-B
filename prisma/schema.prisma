@@ -27,6 +27,7 @@ enum Gender {
   FEMALE
 }
 
+/// Legacy unit enum, now used only by the global admin catalogue (`Material`, DECISIONS O-6).
 enum MaterialUnit {
   KG
   G
@@ -37,29 +38,59 @@ enum MaterialUnit {
   NOs
 }
 
+/// Units for shop products. Conversions live in src/utils/units.ts.
+enum UnitCode {
+  PIECE
+  PACKET
+  BOX
+  CARTON
+  GRAM
+  KILOGRAM
+  MILLILITRE
+  LITRE
+}
+
+enum ProductStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum StockMovementType {
+  OPENING
+  PURCHASE_RECEIPT
+  SALE
+  SALE_RETURN
+  PURCHASE_RETURN
+  DAMAGE
+  EXPIRY
+  ADJUSTMENT
+}
+
 model User {
-  id                     String       @id @default(uuid())
-  username               String       @unique
-  email                  String       @unique
+  id                     String               @id @default(uuid())
+  username               String               @unique
+  email                  String               @unique
   fullname               String
   password               String
   refreshToken           String?
   verifyCode             String?
   verifyCodeExpiry       DateTime?
-  isVerified             Boolean      @default(false)
-  isActive               Boolean      @default(true)
+  isVerified             Boolean              @default(false)
+  isActive               Boolean              @default(true)
   phoneNumber            String
   secondaryPhoneNumber   String?
-  role                   Role         @default(KIRANA)
+  role                   Role                 @default(KIRANA)
   // single-use password reset: only a SHA-256 hash is stored
-  passwordResetTokenHash String?      @unique
+  passwordResetTokenHash String?              @unique
   passwordResetExpiry    DateTime?
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
   kirana                 kirana?
   employee               employee?
   memberships            Membership[]
   sessions               Session[]
+  stockMovements         StockMovement[]
+  priceChanges           ProductPriceChange[]
 }
 
 /// One login session per device. The refresh token is opaque; only its SHA-256 hash is stored.
@@ -99,14 +130,16 @@ model Membership {
 
 /// A physical shop. MVP: exactly one default store per business, created with it.
 model Store {
-  id        String   @id @default(uuid())
-  kiranaId  String
-  name      String
-  address   String?
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  kirana    kirana   @relation(fields: [kiranaId], references: [id])
+  id             String          @id @default(uuid())
+  kiranaId       String
+  name           String
+  address        String?
+  isDefault      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  kirana         kirana          @relation(fields: [kiranaId], references: [id])
+  stockMovements StockMovement[]
+  stockBalances  StockBalance[]
 
   @@index([kiranaId])
 }
@@ -132,6 +165,7 @@ model kirana {
   purchaseOrder    purchaseOrder[]
   stores           Store[]
   memberships      Membership[]
+  brands           Brand[]
 }
 
 model employee {
@@ -171,24 +205,151 @@ model KiranaMaterialCategory {
   @@unique([kiranaId, name])
 }
 
+model Brand {
+  id        String           @id @default(uuid())
+  kiranaId  String
+  name      String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  kirana    kirana           @relation(fields: [kiranaId], references: [id])
+  products  KiranaMaterial[]
+
+  @@unique([kiranaId, name])
+}
+
+/// A shop product. Quantities are in `baseUnit`. `sellingPrice`/`mrp` are per `salesUnit` and
+/// `purchaseCost` per `purchaseUnit`. Stock lives in the ledger (StockMovement), never on this row.
 model KiranaMaterial {
-  id                String                 @id @default(uuid())
-  name              String
-  unit              MaterialUnit
-  categoryId        String
+  id                String                  @id @default(uuid())
   kiranaId          String
-  barcode           String
-  inventory         Float                  @default(0)
-  kirana            kirana                 @relation(fields: [kiranaId], references: [id])
-  category          KiranaMaterialCategory @relation(fields: [categoryId], references: [id])
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
+  name              String
+  sku               String?
+  status            ProductStatus           @default(ACTIVE)
+  categoryId        String?
+  brandId           String?
+  baseUnit          UnitCode
+  salesUnit         UnitCode
+  purchaseUnit      UnitCode
+  sellingPrice      Decimal?                @db.Decimal(14, 2)
+  mrp               Decimal?                @db.Decimal(14, 2)
+  purchaseCost      Decimal?                @db.Decimal(14, 2)
+  hsnCode           String?
+  gstRate           Decimal?                @db.Decimal(5, 2)
+  priceIncludesTax  Boolean                 @default(true)
+  lowStockThreshold Decimal?                @db.Decimal(14, 3)
+  kirana            kirana                  @relation(fields: [kiranaId], references: [id])
+  category          KiranaMaterialCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand             Brand?                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  units             ProductUnit[]
+  barcodes          ProductBarcode[]
+  aliases           ProductAlias[]
+  priceChanges      ProductPriceChange[]
+  stockMovements    StockMovement[]
+  stockBalances     StockBalance[]
   orderItem         orderItem[]
   purchaseOrderItem purchaseOrderItem[]
 
-  @@unique([kiranaId, barcode])
   @@unique([kiranaId, name])
-  @@index([kiranaId, barcode])
+  @@unique([kiranaId, sku])
+  @@index([kiranaId, status])
+}
+
+/// Extra units besides the base unit. `factor` = base units in one of this unit.
+model ProductUnit {
+  id        String         @id @default(uuid())
+  productId String
+  unit      UnitCode
+  factor    Decimal        @db.Decimal(18, 6)
+  product   KiranaMaterial @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, unit])
+}
+
+/// Barcodes are unique per business; `unit` is what one scan means (base unit or a ProductUnit).
+model ProductBarcode {
+  id        String         @id @default(uuid())
+  kiranaId  String
+  productId String
+  code      String
+  unit      UnitCode
+  createdAt DateTime       @default(now())
+  product   KiranaMaterial @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([kiranaId, code])
+  @@index([productId])
+}
+
+/// Search names, e.g. local-language names.
+model ProductAlias {
+  id        String         @id @default(uuid())
+  productId String
+  alias     String
+  product   KiranaMaterial @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, alias])
+}
+
+/// Append-only snapshot of price, cost and tax fields, written on create and on every change.
+model ProductPriceChange {
+  id               String         @id @default(uuid())
+  kiranaId         String
+  productId        String
+  salesUnit        UnitCode
+  sellingPrice     Decimal?       @db.Decimal(14, 2)
+  mrp              Decimal?       @db.Decimal(14, 2)
+  purchaseUnit     UnitCode
+  purchaseCost     Decimal?       @db.Decimal(14, 2)
+  hsnCode          String?
+  gstRate          Decimal?       @db.Decimal(5, 2)
+  priceIncludesTax Boolean
+  effectiveFrom    DateTime       @default(now())
+  changedById      String
+  product          KiranaMaterial @relation(fields: [productId], references: [id])
+  changedBy        User           @relation(fields: [changedById], references: [id])
+
+  @@index([productId, effectiveFrom])
+}
+
+/// Append-only stock ledger. `quantity` is signed and in the product's base unit. No updates or deletes.
+model StockMovement {
+  id              String            @id @default(uuid())
+  kiranaId        String
+  storeId         String
+  productId       String
+  type            StockMovementType
+  quantity        Decimal           @db.Decimal(14, 3)
+  balanceAfter    Decimal           @db.Decimal(14, 3)
+  enteredQuantity Decimal           @db.Decimal(14, 3)
+  enteredUnit     UnitCode
+  unitCost        Decimal?          @db.Decimal(14, 2)
+  reason          String?
+  reference       String?
+  idempotencyKey  String?
+  actorId         String
+  createdAt       DateTime          @default(now())
+  product         KiranaMaterial    @relation(fields: [productId], references: [id])
+  store           Store             @relation(fields: [storeId], references: [id])
+  actor           User              @relation(fields: [actorId], references: [id])
+
+  @@unique([kiranaId, idempotencyKey])
+  @@index([kiranaId, storeId, productId, createdAt])
+}
+
+/// Read model: the sum of a product's movements in a store, updated in the same transaction.
+model StockBalance {
+  id        String         @id @default(uuid())
+  kiranaId  String
+  storeId   String
+  productId String
+  quantity  Decimal        @db.Decimal(14, 3)
+  updatedAt DateTime       @updatedAt
+  product   KiranaMaterial @relation(fields: [productId], references: [id])
+  store     Store          @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, productId])
+  @@index([kiranaId])
 }
 
 model client {

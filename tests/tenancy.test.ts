@@ -17,9 +17,9 @@ describe('tenancy isolation', () => {
             .set(bearer(B.token))
             .send({
                 name: uniqueName('prod'),
-                unit: 'KG',
+                baseUnit: 'KILOGRAM',
                 categoryId: catId,
-                barcode: uniqueName('bc'),
+                barcodes: [{code: uniqueName('bc')}],
             })
             .expect(201);
         const prodId = prod.body.data.id as string;
@@ -38,7 +38,7 @@ describe('tenancy isolation', () => {
         await api
             .post(`${CAT}/products`)
             .set(bearer(A.token))
-            .send({name: uniqueName('p'), unit: 'KG', categoryId: catId, barcode: uniqueName('bc')})
+            .send({name: uniqueName('p'), baseUnit: 'PIECE', categoryId: catId})
             .expect(404);
         await api
             .post(`${CAT}/categories`)
