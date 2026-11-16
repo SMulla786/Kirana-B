@@ -8,12 +8,13 @@ import {hasPermission} from '@config/permissions';
 import {catalogContext} from './catalog.controller';
 
 const posContext = (req: Request) => {
-    const {kiranaId, storeId, userId} = catalogContext(req);
+    const {kiranaId, storeId, userId, canSeeCost} = catalogContext(req);
     const role = tenantOf(req).membershipRole;
     return {
         kiranaId,
         storeId,
         userId,
+        canSeeCost,
         canDiscount: hasPermission(role, 'pos.discount'),
         canOverridePrice: hasPermission(role, 'pos.price.override'),
     };
@@ -27,9 +28,7 @@ export default {
     hold: catchAsync(async (req, res) => {
         const input = posValidation.holdBillSchema.parse(req.body);
         const bill = await heldBillService.hold(posContext(req), input);
-        res.status(httpStatus.CREATED).json(
-            new ApiResponse(httpStatus.CREATED, bill, 'Bill held'),
-        );
+        res.status(httpStatus.CREATED).json(new ApiResponse(httpStatus.CREATED, bill, 'Bill held'));
     }),
     recall: catchAsync(async (req, res) => {
         const id = commonValidation.idSchema.parse(req.params.id);

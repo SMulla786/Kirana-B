@@ -11,7 +11,7 @@ const stackOf = (layer: Layer): Layer[] => layer.handle?.stack ?? [];
 const matches = (layer: Layer, p: string) => !!layer.matchers?.some((m) => m(p));
 
 // Express 5 keeps no mount path, so prefixes are recovered by probing the known mounts.
-const MOUNTS = ['/api/v1', '/auth', '/business', '/catalog', '/admin'];
+const MOUNTS = ['/api/v1', '/auth', '/business', '/catalog', '/customers', '/pos', '/admin'];
 
 const collect = (layers: Layer[], prefix: string, out: string[]) => {
     for (const layer of layers) {

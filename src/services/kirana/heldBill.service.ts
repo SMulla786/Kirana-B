@@ -4,6 +4,7 @@ import prisma from 'client';
 import ApiError from '@utils/ApiError';
 import {toBaseQuantity} from '@utils/units';
 import {posValidation} from '@validations/index';
+import {productInclude, serializeProduct} from './catalog.service';
 
 type Decimal = Prisma.Decimal;
 type HoldInput = z.infer<typeof posValidation.holdBillSchema>;
@@ -17,6 +18,7 @@ export type PosContext = {
     userId: string;
     canDiscount: boolean;
     canOverridePrice: boolean;
+    canSeeCost: boolean;
 };
 
 /** The draft snapshot kept in HeldBill.lines. Decimals are stored as exact strings. */
@@ -28,6 +30,7 @@ type StoredLine = {
     quantity: string;
     unitPrice: string;
     discount: string;
+    priceOverridden: boolean; // stored price differed from the catalogue price at hold time
 };
 
 const lineAmounts = (l: StoredLine) => {
@@ -52,15 +55,29 @@ const include = {
 } satisfies Prisma.HeldBillInclude;
 type Row = Prisma.HeldBillGetPayload<{include: typeof include}>;
 
-const serialize = (row: Row) => {
+const serialize = async (
+    row: Row,
+    ctx: Pick<PosContext, 'kiranaId' | 'storeId' | 'canSeeCost'>,
+) => {
     const lines = row.lines as StoredLine[];
     const t = totals(lines);
+    // The current catalogue, not a snapshot; null once a product is archived or gone.
+    const products = await prisma.kiranaMaterial.findMany({
+        where: {
+            id: {in: [...new Set(lines.map((l) => l.productId))]},
+            kiranaId: ctx.kiranaId,
+            status: 'ACTIVE',
+        },
+        include: productInclude(ctx.storeId),
+    });
+    const byId = new Map(products.map((p) => [p.id, serializeProduct(p, ctx.canSeeCost)]));
     return {
         id: row.id,
         note: row.note,
         customer: row.customer,
         lines: lines.map((l) => ({
             ...l,
+            product: byId.get(l.productId) ?? null,
             quantity: D(l.quantity).toFixed(3),
             unitPrice: D(l.unitPrice).toFixed(2),
             discount: D(l.discount).toFixed(2),
@@ -110,7 +127,8 @@ class HeldBillService {
                 p.sellingPrice === null
                     ? null
                     : round2(p.sellingPrice.mul(factor).div(factors.get(p.salesUnit)!));
-            if (l.unitPrice && !(catalogue && l.unitPrice.equals(catalogue))) {
+            const overridden = !!l.unitPrice && !(catalogue && l.unitPrice.equals(catalogue));
+            if (overridden) {
                 if (!ctx.canOverridePrice) return fail(403, 'You cannot change the price');
             } else if (!l.unitPrice && !catalogue) {
                 return fail(400, `"${p.name}" has no price; enter one`);
@@ -129,6 +147,7 @@ class HeldBillService {
                 quantity: l.quantity.toFixed(3),
                 unitPrice: unitPrice.toFixed(2),
                 discount: discount.toFixed(2),
+                priceOverridden: overridden,
             };
         });
 
@@ -143,7 +162,7 @@ class HeldBillService {
             },
             include,
         });
-        return serialize(row);
+        return serialize(row, ctx);
     }
 
     async list(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>) {
@@ -168,13 +187,13 @@ class HeldBillService {
     }
 
     /** Loads the draft and deletes it atomically, so two tills cannot both recall it. */
-    recall(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>, id: string) {
+    recall(ctx: Pick<PosContext, 'kiranaId' | 'storeId' | 'canSeeCost'>, id: string) {
         const where = {id, kiranaId: ctx.kiranaId, storeId: ctx.storeId};
         return prisma.$transaction(async (tx) => {
             const row = await tx.heldBill.findFirst({where, include});
             const {count} = await tx.heldBill.deleteMany({where});
             if (!row || count === 0) throw new ApiError(404, 'Held bill not found');
-            return serialize(row);
+            return serialize(row, ctx);
         });
     }
 }

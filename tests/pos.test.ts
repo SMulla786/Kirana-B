@@ -89,6 +89,48 @@ describe('held bills', () => {
         await hold(cashier.token, {lines: [line(p.id, {unitPrice: '40.00'})]}).expect(403);
     });
 
+    it('prices from the sales unit, and flags overrides and archived products', async () => {
+        const owner = await createOwner();
+        const cashier = await createMember(owner.token, 'CASHIER');
+        // sellingPrice is per sales unit: 240.00 per CARTON of 24 pieces.
+        const p = await createProduct(owner.token, {
+            units: [{unit: 'CARTON', factor: 24}],
+            salesUnit: 'CARTON',
+            sellingPrice: '240.00',
+            mrp: '250.00',
+            purchaseCost: '200.00',
+        });
+        const piece = await hold(cashier.token, {lines: [line(p.id, {quantity: 3})]}).expect(201);
+        expect(piece.body.data.lines[0]).toMatchObject({unitPrice: '10.00', lineTotal: '30.00'});
+        expect(piece.body.data.lines[0].priceOverridden).toBe(false);
+        // The cashier sees the product without its cost.
+        expect(piece.body.data.lines[0].product).toMatchObject({id: p.id, sellingPrice: '240.00'});
+        expect(piece.body.data.lines[0].product).not.toHaveProperty('purchaseCost');
+        await hold(cashier.token, {lines: [line(p.id, {unitPrice: '10.00'})]}).expect(201);
+        await hold(cashier.token, {lines: [line(p.id, {unitPrice: '9.00'})]}).expect(403);
+        const carton = await hold(cashier.token, {
+            lines: [line(p.id, {unit: 'CARTON', quantity: 1})],
+        }).expect(201);
+        expect(carton.body.data.lines[0].unitPrice).toBe('240.00');
+
+        const over = await hold(owner.token, {lines: [line(p.id, {unitPrice: '9.00'})]}).expect(
+            201,
+        );
+        expect(over.body.data.lines[0]).toMatchObject({priceOverridden: true, unitPrice: '9.00'});
+        expect(over.body.data.lines[0].product).toHaveProperty('purchaseCost', '200.00');
+
+        await api
+            .patch('/api/v1/catalog/products/' + p.id)
+            .set(bearer(owner.token))
+            .send({status: 'ARCHIVED'})
+            .expect(200);
+        const recalled = await api
+            .post(`${HELD}/${over.body.data.id}/recall`)
+            .set(bearer(owner.token))
+            .expect(200);
+        expect(recalled.body.data.lines[0]).toMatchObject({product: null, priceOverridden: true});
+    });
+
     it('lets only roles with the permission discount or override the price', async () => {
         const owner = await createOwner();
         const cashier = await createMember(owner.token, 'CASHIER');

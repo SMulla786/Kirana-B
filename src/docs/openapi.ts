@@ -10,6 +10,8 @@ import {
     businessValidation,
     catalogValidation,
     commonValidation,
+    clientValidation,
+    posValidation,
 } from '@validations/index';
 
 extendZodWithOpenApi(z);
@@ -157,6 +159,7 @@ const Product = z
         hsnCode: z.string().nullable(),
         gstRate: money.nullable(),
         priceIncludesTax: z.boolean(),
+        isFavourite: z.boolean(),
         lowStockThreshold: qty.nullable(),
         stock: z.object({quantity: qty, isLow: z.boolean()}),
         createdAt: date,
@@ -218,6 +221,51 @@ const Movement = z
         createdAt: date,
     })
     .openapi('StockMovement');
+const Customer = z.object({id, name: z.string(), phoneNumber: z.string()}).openapi('Customer');
+const personRef = z.object({id, fullname: z.string()});
+const HeldBill = z
+    .object({
+        id,
+        note: z.string().nullable(),
+        customer: Customer.nullable(),
+        lines: z.array(
+            z.object({
+                productId: id,
+                productName: z.string(),
+                product: Product.nullable().openapi({
+                    description:
+                        'Current catalogue entry (cost shown only with catalog.cost.view); null if archived or removed',
+                }),
+                unit: unitCode,
+                factor: z.string().openapi({description: 'Base units in one of this unit'}),
+                quantity: qty.openapi({description: 'In the selected unit'}),
+                unitPrice: money.openapi({description: 'Per selected unit, snapshotted'}),
+                discount: money,
+                lineTotal: money.openapi({description: 'round2(quantity x unitPrice) - discount'}),
+                priceOverridden: z.boolean().openapi({
+                    description:
+                        'The stored unitPrice differed from the catalogue price at hold time',
+                }),
+            }),
+        ),
+        subtotal: money,
+        discountTotal: money,
+        total: money,
+        createdBy: personRef,
+        createdAt: date,
+    })
+    .openapi('HeldBill');
+const HeldBillSummary = z
+    .object({
+        id,
+        note: z.string().nullable(),
+        customer: idRef.nullable(),
+        lineCount: z.number().int(),
+        total: money,
+        createdBy: personRef,
+        createdAt: date,
+    })
+    .openapi('HeldBillSummary');
 const Health = z.object({status: z.string(), db: z.string()});
 const NewBusiness = z.object({
     business: idRef,
@@ -468,6 +516,39 @@ stock(
         },
     },
 );
+
+// Customers (minimal; Phase 5 builds the real customer work)
+const cust = (m: Method, path: string, summary: string, rest: Partial<Op>) =>
+    route({method: m, path, tag: 'Customers', summary, permission: 'customers.manage', ...rest});
+cust('get', '/customers', 'Search customers by name or phone (up to 20)', {
+    query: clientValidation.customerQuerySchema,
+    data: z.array(Customer),
+});
+cust('post', '/customers', 'Create a customer', {
+    body: clientValidation.createCustomerSchema,
+    status: 201,
+    data: Customer,
+    extraResponses: {409: {description: 'Phone already in use', schema: ErrorResponse}},
+});
+
+// POS held bills: drafts, never sales. They post no stock, order, wallet or revenue.
+const pos = (m: Method, path: string, summary: string, rest: Partial<Op>) =>
+    route({method: m, path, tag: 'POS', summary, permission: 'pos.use', ...rest});
+const notFound = {404: {description: 'Not found', schema: ErrorResponse}};
+pos('get', '/pos/held', 'Held bills for the session store, newest first', {
+    data: z.array(HeldBillSummary),
+});
+pos(
+    'post',
+    '/pos/held',
+    'Hold a bill. The price is snapshotted by the server; a discount needs pos.discount and a different price needs pos.price.override',
+    {body: posValidation.holdBillSchema, status: 201, data: HeldBill, extraResponses: notFound},
+);
+pos('post', '/pos/held/{id}/recall', 'Recall a held bill; it is deleted in the same step', {
+    params: idParams,
+    data: HeldBill,
+    extraResponses: notFound,
+});
 
 // Platform admin (role ADMIN, no tenant permission)
 const adm = (m: Method, path: string, summary: string, rest: Partial<Op>) =>

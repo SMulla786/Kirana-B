@@ -20,7 +20,7 @@ export type CatalogContext = {
     canSeeCost: boolean;
 };
 
-const productInclude = (storeId: string) =>
+export const productInclude = (storeId: string) =>
     ({
         category: {select: {id: true, name: true}},
         brand: {select: {id: true, name: true}},
