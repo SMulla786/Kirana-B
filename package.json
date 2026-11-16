@@ -20,8 +20,8 @@
         "build": "tsc",
         "start": "node -r module-alias/register --env-file=.env dist/index.js",
         "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register --env-file=.env src/index.ts",
-        "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" vitest.config.ts",
-        "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" vitest.config.ts --fix",
+        "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"scripts/**/*.ts\" vitest.config.ts",
+        "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"scripts/**/*.ts\" vitest.config.ts --fix",
         "test": "vitest run",
         "test:watch": "vitest",
         "prettier": "prettier --check **/*.ts",
@@ -35,7 +35,8 @@
         "prisma:db:seed": "prisma db seed",
         "prisma:reset": "prisma migrate reset --force",
         "updateRoleToAdmin": "node -r module-alias/register src/cli/updateRoleToAdmin.js",
-        "registerAdmin": "node -r module-alias/register dist/cli/registerAdmin.js"
+        "registerAdmin": "node -r module-alias/register dist/cli/registerAdmin.js",
+        "openapi:export": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/export-openapi.ts"
     },
     "lint-staged": {
         "src/**/*.{ts,tsx,js,jsx}": [
@@ -59,6 +60,7 @@
     ],
     "license": "ISC",
     "dependencies": {
+        "@asteasolutions/zod-to-openapi": "^7.3.4",
         "@prisma/client": "^5.21.1",
         "bcryptjs": "^2.4.3",
         "compression": "^1.7.4",
@@ -72,7 +74,6 @@
         "module-alias": "^2.2.3",
         "morgan": "^1.10.0",
         "nodemailer": "^6.9.15",
-        "swagger-jsdoc": "^6.2.8",
         "swagger-ui-express": "^5.0.1",
         "winston": "^3.14.2",
         "xss-filters": "^1.2.7",
@@ -92,7 +93,6 @@
         "@types/node": "^22.5.1",
         "@types/nodemailer": "^6.4.15",
         "@types/supertest": "^7.2.1",
-        "@types/swagger-jsdoc": "^6.0.4",
         "@types/swagger-ui-express": "^4.1.6",
         "@types/xss-filters": "^0.0.30",
         "@typescript-eslint/eslint-plugin": "^8.3.0",
