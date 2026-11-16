@@ -4049,8 +4049,15 @@
                           ]
                         },
                         "factor": {
-                          "type": "string",
-                          "example": "12.50"
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -4100,16 +4107,46 @@
                     "maxItems": 20
                   },
                   "sellingPrice": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "mrp": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "purchaseCost": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "hsnCode": {
                     "type": "string",
@@ -4117,15 +4154,35 @@
                     "pattern": "^\\d{4,8}$"
                   },
                   "gstRate": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "priceIncludesTax": {
                     "type": "boolean"
                   },
                   "lowStockThreshold": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "baseUnit": {
                     "type": "string",
@@ -4423,8 +4480,15 @@
                           ]
                         },
                         "factor": {
-                          "type": "string",
-                          "example": "12.50"
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -4474,16 +4538,46 @@
                     "maxItems": 20
                   },
                   "sellingPrice": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "mrp": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "purchaseCost": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "hsnCode": {
                     "type": "string",
@@ -4491,15 +4585,35 @@
                     "pattern": "^\\d{4,8}$"
                   },
                   "gstRate": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "priceIncludesTax": {
                     "type": "boolean"
                   },
                   "lowStockThreshold": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "status": {
                     "type": "string",
@@ -5196,8 +5310,15 @@
                     ]
                   },
                   "quantity": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ]
                   },
                   "unit": {
                     "type": "string",
@@ -5213,8 +5334,18 @@
                     ]
                   },
                   "unitCost": {
-                    "type": "string",
-                    "example": "12.50"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
                   },
                   "reason": {
                     "type": "string",
