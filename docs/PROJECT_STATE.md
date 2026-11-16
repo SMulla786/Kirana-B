@@ -1,8 +1,75 @@
 # Project state
 
-_Last updated 2026-11-16 · **Phase 2 backend done** (catalogue, units, barcodes, stock ledger, import),
-with web screens on kirana-F branch `phase2/catalogue`. The desktop shell (Tauri, A-026) is in progress.
-Next: see the bottom_
+_Last updated 2026-11-16 · **Phase 3 (web POS) built on branches `phase3/pos`** in Kirana-B and kirana-F.
+They are not merged or pushed, and wait for the live pass and the owner's OK. Phase 2 is merged and pushed. The
+desktop shell (Tauri, A-026) is in progress. Next: see the bottom_
+
+## Phase 3: what was built (2026-11-16)
+
+Web first (A-023): the POS is an online kirana-F screen at `/pos`. Its React components are meant for reuse
+in the Tauri shell later. The model is in DECISIONS A-028.
+
+**Branches:** both local and unpushed.
+- **Kirana-B** `phase3/pos`, on `f0b6c90`:
+  - `535fc68`: favourites (`isFavourite`, `?favourite=true`), brand name in `q`, and the `pos.discount` /
+    `pos.price.override` permissions.
+  - `22d79eb`: customers search/create, and held bills with their tests.
+  - `0b99256`: each held-bill line carries `product` and `priceOverridden`, plus OpenAPI for both.
+  - `8aba695`: fixed metric units without a stored row (kg on a gram base), and openapi.json regenerated.
+- **kirana-F** `phase3/pos`, on `aa7e8e4` (Phase 2 main):
+  - `163c6a3`: money, cart reducer, scanner hook and shortcuts.
+  - `58c245d`: the screen and dialogs.
+  - `560ec32`: unit price per sales unit; recalled lines rebuilt from the product.
+  - `0ce655d`: recall shows today's catalogue price.
+  - `c55ad94`: a test fix.
+  - `53a8513`: types generated from the phase3 openapi.json.
+
+**Backend:**
+- **Endpoints:** `GET/POST /pos/held` and `POST /pos/held/:id/recall` (`pos.use`), plus `GET/POST /customers`
+  (`customers.manage`).
+- **Held bills:** a held bill is a draft. It never touches stock, orders, wallets or revenue (tested by
+  snapshotting all four).
+- **Pricing:** the server snapshots the price per line from the sales-unit price. A different client price
+  gets 403 without `pos.price.override`; a discount gets 403 without `pos.discount`.
+- **Validation:** units, quantities and the discount cap are checked per line.
+- **Recall:** it deletes the draft in its transaction, so a second recall gets 404.
+
+**Web (`src/pages/pos/`):**
+- **Layout:** the header shows store, cashier and online/offline. The left rail has Favourites and the
+  categories. In the centre is `ProductSearch`, from Phase 2: it matches name, alias, SKU, barcode and brand,
+  and Enter on an exact code does a lookup. Below it is a tile grid showing price and stock with a low/out
+  label. The cart panel stays on screen.
+- **Cart:**
+  - Money is integer paise and quantity integer milli-units, with no float maths.
+  - A repeat scan of the same product and unit adds 1; a different unit makes a new line.
+  - Loose products open a weight dialog (up to 3 dp, kg/g).
+  - Pack units act as variants, through a unit picker.
+  - The discount and price-override inputs only show with the matching permission.
+- **Scanner:** keyboard-wedge burst detection. The suffix, gap and minimum length are configurable. A burst
+  into a qty/price/discount field (`data-pos-guard`) restores that field and still adds the item.
+- **Shortcuts:** F1 help, F2 search, F3 qty, F4 customer, F6 discount, F8 hold, F9 recall, Delete,
+  arrows, +/- and Esc. They can be remapped and are saved per device. While typing, only F-keys and Escape
+  fire.
+- **Dialogs:** hold with a note; recall (offering to hold the current cart first); customer search and quick
+  add; shortcut help.
+- **Layout widths:** at ≥1280 px the three panes are 200 px | 1fr | 380 px. At 1024–1279 px the rail becomes
+  chips and the cart is 340 px. Below 1024 px the panes stack.
+- **i18n:** a `pos` namespace in en/hi/mr. The hi/mr strings are machine-drafted and flagged for review.
+
+**Checks** (run 2026-11-16 on the branches):
+
+| Repo     | Command                                                  | Result                         |
+| -------- | -------------------------------------------------------- | ------------------------------ |
+| Kirana-B | `npx tsc --noEmit`, `npx tsc --noEmit -p tsconfig.test.json` | ✅ 0 errors                 |
+| Kirana-B | `npm run lint`                                           | ✅ clean                        |
+| Kirana-B | `npx vitest run` (separate `kirana_p3_test` DB)          | ✅ 12 files, 128 passed         |
+| kirana-F | `npx tsc`, `npx prettier --check src`                    | ✅ clean                        |
+| kirana-F | `npx vitest run`                                         | ✅ 20 files, 109 passed (incl. POS perf: 500 adds + totals < 100 ms, 500 tiles) |
+| kirana-F | `npm run build`                                          | ✅                              |
+| Live     | Browser pass on `kirana_live_test`, done by a parallel session | ⏳ pending                |
+
+UI skills used: `frontend-design`, `emil-design-eng`, `apple-design` and `break-ui`. `pick-ui-library` and
+`prototype` aren't installed, and no UI dependency was added.
 
 ## Phase 2: what was built (2026-11-16)
 
@@ -123,8 +190,8 @@ the first build.
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16)                  | Backend API + project memory                                 |
-| `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 screens merged and pushed) | Web admin (React 19 + TS + Vite)                            |
+| `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16); local branch `phase3/pos` | Backend API + project memory                       |
+| `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 pushed); local branch `phase3/pos` | Web admin (React 19 + TS + Vite)                   |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
 | `kirana/Kirana-desktop/` | `main` `766dece`, 7 local commits, **not pushed**                  | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
@@ -214,6 +281,14 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 
 ## Migrations
 
+- **Phase 3:** `prisma/migrations/20261116200000_phase3_pos/`. It's additive only:
+  - `KiranaMaterial."isFavourite" BOOLEAN NOT NULL DEFAULT false`;
+  - a `HeldBill` table, with an index on `(kiranaId, storeId, createdAt)`;
+  - FKs to kirana, Store and User (RESTRICT), and to client (SET NULL).
+
+  It was generated with `prisma migrate diff`, so no DB was touched. It's in the branch worktree and **not
+  yet applied to the dev DB**: at merge, copy the folder into `Kirana-B/prisma/migrations/` and run
+  `npx prisma migrate deploy`.
 - **Phase 2:** `prisma/migrations/20261116180000_phase2_catalogue_stock_ledger/`. The SQL was
   hand-reviewed and applied to the dev DB `kirana` (0 products) and to `kirana_test` (legacy test rows).
   - It adds the new enums and tables, then backfills:
@@ -252,6 +327,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Desktop POS shell          | 🟡     | Tauri shell wraps kirana-F (A-029); Rust never compiled (no toolchain); hardware is O-4       |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
+| POS (web): cart, scan, held bills | 🟡 | Phase 3 built and tested on branches; live pass and merge pending                  |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
@@ -299,6 +375,23 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
     - Category and brand names are unique case-sensitively in the DB; the import matches them
       case-insensitively.
     - The global `Material` catalogue is untouched and unused (O-6).
+11. **Phase 3 gaps:**
+    - **Tax:** no GST in the cart preview; Phase 4 invoices compute tax.
+    - **Out of stock:** products can still be added. The ledger allows SALE below zero, and the warning
+      is a text label.
+    - **Hindi/Marathi:** the POS strings are machine-drafted and need native review.
+    - **Re-holding:** a recalled bill whose override or discount was set by a manager can't be re-held by a
+      cashier (403, shown inline, with "Reset to catalogue price" / "Remove discount" buttons). Non-overridden
+      lines show and re-hold at today's catalogue price.
+    - **Customers:** search and quick add only. Credit, udhaar and statements are Phase 5.
+    - **Held bills:** no expiry or cleanup job. The list is capped at 200 per store.
+    - **Not run:** no concurrent-recall test (the 404 is tested in sequence; the transaction's delete count
+      decides it), and no real hardware scanner test (the wedge is simulated in jsdom).
+    - **Shortcut:** `src/docs/openapi.ts` emits nullable registered refs as `allOf + nullable`, and
+      openapi-typescript drops the null. kirana-F restores it in `src/pages/pos/types.ts` (marked
+      `shortcut:`).
+    - **Catalogue validation:** it is stricter than the ledger. A product with `salesUnit: KILOGRAM` on a
+      GRAM base needs a stored KILOGRAM unit row (reported to the Phase 2 owner).
 
 ## Manual verification
 
@@ -325,6 +418,18 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
    - Scan the barcode in `ProductSearch`.
    - As a cashier, no purchase cost is visible anywhere.
    - Import a CSV with one bad row: the preview lists it, and the commit is refused with nothing written.
+7. **Phase 3:** apply the Phase 3 migration, then open `/pos` with an owner and a cashier.
+   - **Scanning:** type a barcode fast and press Enter, with focus anywhere outside the search box: the item
+     is added. Scan it again: its quantity becomes 2. Scan while the qty box is focused: the field is
+     restored and the item is still added.
+   - **Weighed items and totals:** sell a loose gram product as 1.25 kg. Check that the totals are right
+     after changing qty, unit and discount.
+   - **Hold and recall:** hold (F8). The product's stock and movements are unchanged. Recall (F9) loads the
+     bill, and recalling it again from a second tab gives 404.
+   - **Cashier:** the cashier sees no discount or price inputs. Re-holding an owner's discounted bill gives an
+     inline 403, and the cart is kept.
+   - **Keyboard and layout:** the keyboard alone (F2, arrows, Delete, +/-, F1 help) never leaves focus on
+     the page body. At 1024×600 the cart and grid don't overlap.
 
 ## Next action
 
@@ -335,5 +440,11 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **Then, in a fresh chat:** Phase 3 (POS), using the blueprint prompt and the A-023 web-first note.
-   A parallel session has already started Phase 3 on kirana-F `phase3/pos`.
+2. **Phase 3 merge:** this needs the owner's OK.
+   - Finish the live pass and the independent review.
+   - Merge Kirana-B `phase3/pos` (a fast-forward on `f0b6c90`) and kirana-F `phase3/pos` (on `aa7e8e4`).
+   - Copy and apply the Phase 3 migration to the dev DB.
+   - Push both and confirm CI is green.
+3. **Then, in a fresh chat:** Phase 4 (checkout, payments, invoices, receipts, returns). Use the blueprint
+   prompt, posting stock through `applyMovement(... type 'SALE')`. Settle O-8 (GST registration) and O-10
+   (trusted UPI) first.

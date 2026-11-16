@@ -10,7 +10,7 @@ Each phase runs in a fresh Claude Code chat, using that phase's prompt from
 | 1A  | Backend foundation: build fix, test harness, auth security, business + store, roles, tenancy | 0 + owner prerequisites     | ✅ Done 2026-11-16 (pushed) |
 | 1B  | Client foundation: `kirana-F` web admin shell, design tokens (desktop shell moved to the end, A-023) | 1A; O-9                     | ✅ Done 2026-11-16 (web scope) |
 | 2   | Catalogue, units, barcodes, stock ledger                                                   | 1A (1B for screens)         | ✅ Done 2026-11-16: backend `ff72475`+fixes, web `aa7e8e4`; live-passed, merged and pushed |
-| 3   | POS (web first, A-023): search, scanning, cart, held bills                                 | 1B, 2                       | Not started            |
+| 3   | POS (web first, A-023): search, scanning, cart, held bills                                 | 1B, 2                       | 🟡 Built 2026-11-16 on `phase3/pos` (both repos), tests green; live pass + merge pending |
 | 4   | Checkout, payments, invoices, receipt printing, returns                                    | 3; O-8, O-10                | Not started            |
 | 5   | Customers and udhaar ledger                                                                | 4                           | Not started            |
 | 6   | Suppliers, purchasing, goods receiving, stock operations                                   | 2, 4                        | Not started            |

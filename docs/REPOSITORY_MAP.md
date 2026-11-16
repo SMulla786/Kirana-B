@@ -59,11 +59,17 @@ Kirana-B/
 | PATCH                | `/business/members/:id`                                                     | members.manage + canAssignRole   |
 | GET / POST           | `/catalog/categories`, `/catalog/products`                                  | catalog.read / catalog.manage    |
 | GET / PATCH / DELETE | `/catalog/categories/:id`, `/catalog/products/:id`                          | catalog.read / catalog.manage    |
+| GET / POST           | `/customers` (`?q=` search, quick add; Phase 3 minimal)                     | customers.manage                 |
+| GET / POST           | `/pos/held` (list, hold a draft bill)                                       | pos.use (+ pos.discount / pos.price.override per line) |
+| POST                 | `/pos/held/:id/recall` (load + delete the draft)                            | pos.use                          |
 | GET                  | `/admin`                                                                    | platform ADMIN                   |
 | POST                 | `/admin/businesses`                                                         | platform ADMIN                   |
 
-Unrouted code: the client and order services (tenant-scoped; to be retired per P-011) and the admin
-master-material service (O-6).
+Unrouted code: the order service and the client update/delete/wallet parts (tenant-scoped; to be retired
+per P-011), and the admin master-material service (O-6). Phase 3 routes only client search/create.
+Phase 3 files: `services/kirana/heldBill.service.ts`, `controllers/kirana/{pos,customer}.controller.ts`,
+`routes/{pos,customer}.routes.ts`, `validations/pos.validation.ts`, `tests/{pos,customers}.test.ts`.
+kirana-F POS: `src/pages/pos/` (money, cart reducer, scanner hook, shortcuts, screen, dialogs).
 
 ## Data model (`prisma/schema.prisma`, including staged changes)
 

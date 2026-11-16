@@ -9,7 +9,7 @@ Client apps: kirana-F web admin shell (Vite, :5173; Phase 1A/1B). Desktop and An
 Express 5 (src/app.ts)
    requestId → helmet → json/urlencoded (1 MB) → static /public → cookieParser → compression → CORS
    allow-list → morgan ([request-id] in each line)
-   GET /health (DB ping) · /api/v1 → routes/index.ts → /auth /business /catalog /admin · /api-docs
+   GET /health (DB ping) · /api/v1 → routes/index.ts → /auth /business /catalog /stock /customers /pos /admin · /api-docs
    notFoundHandler → errorConverter (Zod / Prisma / body-parser / ApiError) → errorHandler (ApiResponse JSON;
    5xx bodies are generic, and the cause is logged with the request id)
    ▼
