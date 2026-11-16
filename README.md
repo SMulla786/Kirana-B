@@ -84,13 +84,15 @@ CI is defined in `.github/workflows/ci.yml` (Postgres 16 service, typecheck, lin
 - **Docs:** `/api-docs` (Swagger UI) and `/api-docs/openapi.json`, generated from zod (A-025). After
   changing routes run `npm run openapi:export` and commit `openapi.json`.
 
-## Routes (Phase 1A)
+## Routes (Phases 1A and 2)
 
 | Area           | Endpoints                                                                                                 |
 | -------------- | --------------------------------------------------------------------------------------------------------- |
 | Auth (public)  | `POST /auth/register` `/verify-code` `/resend-code` `/login` `/refresh` `/logout` `/password/forgot` `/password/reset` |
 | Auth (session) | `GET/PATCH /auth/me` · `POST /auth/password/change` `/logout-all` · `GET /auth/sessions` · `DELETE /auth/sessions/:id` |
 | Business       | `GET/PATCH /business` · `GET/POST /business/members` · `PATCH /business/members/:id`                      |
-| Catalogue      | `GET/POST /catalog/categories` · `GET/PATCH/DELETE /catalog/categories/:id` (same shape for `/catalog/products`) |
+| Catalogue      | `GET/POST /catalog/categories` · `GET/PATCH/DELETE /catalog/categories/:id` · `GET/POST /catalog/brands` · `PATCH/DELETE /catalog/brands/:id` |
+| Products       | `GET/POST /catalog/products` (search, filters, pages) · `GET/PATCH /catalog/products/:id` (archive via `status`) · `GET /catalog/products/:id/prices` · `GET /catalog/lookup?code=` · `POST /catalog/import` (dry run / commit) |
+| Stock          | `GET/POST /stock/movements` (append-only ledger; balances update in the same transaction) |
 | Platform admin | `GET /admin` · `POST /admin/businesses`                                                                   |
 | Ops            | `GET /health` (outside `/api/v1`)                                                                         |

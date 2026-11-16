@@ -1,7 +1,59 @@
 # Project state
 
-_Last updated 2026-11-16 · **Phase 1 complete for the web scope** (1A backend + 1B web shell; desktop and
-Android moved to the end by A-023) · Next: Phase 2_
+_Last updated 2026-11-16 · **Phase 2 backend done** (catalogue, units, barcodes, stock ledger, import),
+with web screens on kirana-F branch `phase2/catalogue`. The desktop shell (Tauri, A-026) is in progress.
+Next: see the bottom_
+
+## Phase 2: what was built (2026-11-16)
+
+Kirana-B `ff72475` (local, not pushed). It contains the backend and the acceptance tests, which a
+parallel session wrote against the API contract on branch `phase2/tests`.
+
+- **Model.** `KiranaMaterial` stays the product table (A-015: no renames). It gains:
+  - SKU, `status` (ACTIVE/ARCHIVED), category and brand;
+  - `baseUnit`/`salesUnit`/`purchaseUnit`;
+  - `sellingPrice`/`mrp` (per sales unit) and `purchaseCost` (per purchase unit);
+  - HSN, GST %, `priceIncludesTax` and `lowStockThreshold`.
+
+  New tables: `Brand`, `ProductUnit` (factor = base units per unit), `ProductBarcode` (unique per
+  business; carries the unit one scan means), `ProductAlias`, `ProductPriceChange` (append-only
+  snapshots), `StockMovement` (append-only ledger), and `StockBalance` (read model).
+- **Units** (`src/utils/units.ts`):
+  - The units are PIECE, PACKET, BOX, CARTON, GRAM, KILOGRAM, MILLILITRE and LITRE.
+  - Metric factors are fixed: 1 kg = 1000 g.
+  - Pack sizes are per product, and must be whole numbers over a count base.
+  - A metric unit over a count base is rejected.
+  - Quantities are Decimal with at most 3 dp in base units, and are never rounded.
+  - Loose (weighed) items are the ones with a mass or volume base unit.
+- **Ledger** (`stock.service.ts` `applyMovement`):
+  - The balance upsert locks the row, then the movement is appended with `balanceAfter`, in one
+    transaction.
+  - Rules:
+    - OPENING is allowed once per product and store.
+    - DAMAGE, EXPIRY and ADJUSTMENT need a reason.
+    - No movement may take stock negative, except SALE.
+    - Idempotency keys make retries safe.
+  - The manual API allows OPENING, DAMAGE, EXPIRY and ADJUSTMENT. SALE and PURCHASE_* will be posted
+    by their documents in Phases 4 and 6.
+- **Prices:** every change to price, cost, unit or tax appends a snapshot. Past snapshots and movement
+  `unitCost` never change (tested). Sale-line snapshots come with Phase 4.
+- **API:**
+  - `/catalog/products`: search across name, alias, SKU and barcode, with filters and pagination; CRUD;
+    archive via PATCH status, with no delete.
+  - `/catalog/products/:id/prices`, `/catalog/lookup?code=` (barcode, then SKU).
+  - `/catalog/brands`.
+  - `/catalog/import`: a dry-run report, then an all-or-nothing commit that returns 422 with row errors
+    and writes nothing on failure.
+  - `/stock/movements`.
+  - A duplicate name, SKU or barcode returns 409 naming the conflicting product.
+- **Permissions:** the new `catalog.cost.view` (OWNER, MANAGER, INVENTORY_MANAGER, ACCOUNTANT) controls
+  whether `purchaseCost`/`unitCost` keys appear in responses. Cashiers and staff never receive them.
+- **Removed:** the old material module, and the unmounted admin `material.service.ts` (dead code).
+- **kirana-F** (branch `phase2/catalogue`, built by a parallel session against the contract):
+  - Product list, form and detail; the record-stock dialog; categories and brands; CSV import preview
+    and commit; a reusable `ProductSearch`.
+  - Its report: tsc ✅, vitest 68/68, build ✅.
+  - Not yet merged into kirana-F `main`, and still to be switched to the generated types.
 
 **Phase 1 closing (2026-11-16):**
 - Pushed `Kirana-B` to `45d1b9a`; GitHub Actions CI ran on it and **passed**.
@@ -18,10 +70,10 @@ Android moved to the end by A-023) · Next: Phase 2_
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main`; `origin/main` = `d3c9a0c`; Phase 1A commits are local, **not pushed** | Backend API + project memory                       |
-| `kirana/kirana-F/`       | `main`; local commits only, **not pushed**                          | Web admin shell (React 19 + TS + Vite)                        |
+| `kirana/Kirana-B/`       | `main`; `origin/main` = `dbb3b66`; `14899e4` and the Phase 2 commits are local, **not pushed** | Backend API + project memory |
+| `kirana/kirana-F/`       | `main` = `origin/main` `04d6ec4`; Phase 2 screens on local branch `phase2/catalogue` | Web admin (React 19 + TS + Vite)      |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
-| `kirana/Kirana-desktop/` | empty                                                               | Windows POS (waits for O-4)                                  |
+| `kirana/Kirana-desktop/` | Phase 1 shell in progress (Tauri 2 + React + TS, A-026)             | Windows POS                                                  |
 
 `SMulla786/kirana-backend` (the old repo, which holds the leaked credentials) still exists on GitHub (O-1, O-17).
 
@@ -77,7 +129,20 @@ in one commit with their tests.
 - **Auth:** cookie auth with a single refresh-and-retry; no tokens in web storage. API types are written
   by hand (P-008 is still to do).
 
-## Checks (run 2026-11-16, Node 24.21, npm 11.19, Prisma 5.22, TS 5.9)
+## Phase 2 checks (run 2026-11-16 on `ff72475`)
+
+| Check                  | Command (in `Kirana-B/`)                 | Result                                         |
+| ---------------------- | ---------------------------------------- | ---------------------------------------------- |
+| Typecheck src / tests  | `npx tsc --noEmit`, `npx tsc --noEmit -p tsconfig.test.json` | ✅ 0 errors                  |
+| Lint + Prettier        | `npm run lint`                           | ✅ clean                                        |
+| Tests                  | `npm test`                               | ✅ 10 files, 114 passed (85 earlier + 24 acceptance + 5 unit-conversion) |
+| OpenAPI                | `npm run openapi:export`                 | ✅ `openapi.json` regenerated; the staleness test passes |
+| Migration              | `npx prisma migrate deploy` / `migrate status` | ✅ 9 migrations, dev DB up to date        |
+
+Not run in this phase: `npm run build`, GitHub CI (nothing pushed), and a browser check of the new
+kirana-F screens.
+
+## Phase 1 checks (run 2026-11-16, Node 24.21, npm 11.19, Prisma 5.22, TS 5.9)
 
 | Check                         | Command (in `Kirana-B/`)                       | Result                                      |
 | ----------------------------- | ---------------------------------------------- | ------------------------------------------- |
@@ -96,7 +161,18 @@ in one commit with their tests.
 
 ## Migrations
 
-- A new local migration, `prisma/migrations/20261116120000_phase1a_business_store_membership_session/`,
+- **Phase 2:** `prisma/migrations/20261116180000_phase2_catalogue_stock_ledger/`. The SQL was
+  hand-reviewed and applied to the dev DB `kirana` (0 products) and to `kirana_test` (legacy test rows).
+  - It adds the new enums and tables, then backfills:
+    - legacy `unit` → `baseUnit`/`salesUnit`/`purchaseUnit` (DOZON and NOs → PIECE);
+    - `barcode` → `ProductBarcode`;
+    - a baseline `ProductPriceChange` per product;
+    - non-zero `inventory` → an OPENING (or ADJUSTMENT if negative) movement plus a balance in the
+      default store.
+  - Only then does it drop `unit`, `barcode` and `inventory`.
+  - The test DB needed this, because `prisma db push` can't add required columns to a table with rows.
+    Fresh databases still use `db push`.
+- **Phase 1A:** a new local migration, `prisma/migrations/20261116120000_phase1a_business_store_membership_session/`,
   was created as reviewed SQL and applied to the dev DB `kirana`, which was empty (owner: throwaway).
   - It adds the `MembershipRole` enum and the `Session`, `Membership` and `Store` tables.
   - It adds `kirana.name`/`gstin`, defaults `amount`/`renewalAmount` to 0, makes `User.email` unique, and
@@ -119,12 +195,12 @@ in one commit with their tests.
 | Authentication / sessions  | ✅     | See above. Deferred: cashier PIN, per-account lockout                                        |
 | Roles / permissions        | ✅     | Server-enforced and tested; the UI only hides                                                |
 | Tenant isolation           | ✅     | Catalogue, business and members are tested cross-tenant; order/client services scoped, unrouted |
-| Web admin shell            | 🟡     | Built; mobile verified; restyle to A-022 in progress; no i18n yet (O-9)                      |
-| Desktop POS shell          | ❌     | Waits for O-4 (Electron and hardware)                                                         |
+| Web admin shell            | ✅     | A-022 look, i18n en/hi/mr, generated API types                                               |
+| Desktop POS shell          | 🟡     | Tauri 2 shell in progress (A-026); hardware is still O-4                                      |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
-| Catalogue / units / stock  | 🟡⚠️   | Basic tenant-scoped CRUD only. Hard delete; `inventory` Float; enum units → Phase 2           |
+| Catalogue / units / stock  | ✅     | Phase 2 backend; web screens on `phase2/catalogue` (not merged yet)                          |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
-| OpenAPI contract (P-008)   | ❌     | Swagger UI exists with no annotations; kirana-F types are hand-written                        |
+| OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
 ## Known gaps and risks
 
@@ -159,6 +235,17 @@ in one commit with their tests.
    - `@types/express` is v4.
    - Catering fields remain in `client.validation`; the `Gender` enum is unused.
 9. **Email delivery** was never tested against real SMTP; tests use `jsonTransport`.
+10. **Phase 2 gaps:**
+    - The ledger is append-only in code (no update or delete routes or services). There is no DB
+      trigger yet; add one in Phase 10.
+    - No stock valuation yet: movements store `unitCost`, and the method waits for O-15.
+    - Variants are separate products, because nothing in the brief requires variant groups.
+    - Import is create-only (no update-existing mode), CSV only (save Excel as CSV), and capped at
+      1000 rows in one transaction.
+    - Low-stock thresholds are per product, not per store (single store, A-002).
+    - Category and brand names are unique case-sensitively in the DB; the import matches them
+      case-insensitively.
+    - The global `Material` catalogue is untouched and unused (O-6).
 
 ## Manual verification
 
@@ -175,16 +262,28 @@ in one commit with their tests.
    - Staff → add a cashier, then log in as the cashier: they land on `/pos` with a reduced nav, and
      catalogue edits are rejected by the API (403).
 5. Check the layout at 375, 768 and 1280 px widths.
+6. **Phase 2:** apply the migration (`npx prisma migrate deploy`), then check out kirana-F
+   `phase2/catalogue`.
+   - Create a product with base GRAM and a 500 g PACKET unit plus a barcode.
+   - Record OPENING 2.5 KILOGRAM: stock should show 2500.000.
+   - Record DAMAGE 1 PACKET with a reason: stock should show 2000.000.
+   - A second OPENING should return 409.
+   - Change the selling price: price history gets a new row, and the old row is unchanged.
+   - Scan the barcode in `ProductSearch`.
+   - As a cashier, no purchase cost is visible anywhere.
+   - Import a CSV with one bad row: the preview lists it, and the commit is refused with nothing written.
 
 ## Next action
 
 1. **Owner:**
-   - Approve pushing the final Phase 1 batch (Kirana-B docs + OpenAPI; kirana-F i18n + types).
-   - Confirm that Kirana-B should be public.
+   - Approve pushing Kirana-B (`14899e4` and the Phase 2 commits) and merging kirana-F `phase2/catalogue`.
+   - Confirm Kirana-B should be public.
    - Archive or delete `kirana-backend`.
-   - Back up `prisma/migrations/`.
-   - Answer O-6 (global catalogue: keep or drop?) and O-15 (cost basis), which Phase 2 needs.
+   - Back up `prisma/migrations/`, which now has 9 migrations.
+   - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
+     movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **Then, in a fresh chat:** paste the blueprint's Phase 2 prompt and add:
-   _"Implement Phase 2 only, as defined in docs/PHASE_PLAN.md. Web first (A-023): catalogue and stock
-   screens go in kirana-F, following CLAUDE.md 'UI design rules'."_
+2. **kirana-F:** switch `phase2/catalogue` to the generated types (`npm run api:types`), run the checks
+   and a browser pass at 375 and 1280 px, then merge into `main`.
+3. **Then, in a fresh chat:** Phase 3 (POS), using the blueprint prompt and the A-023 web-first note.
+   A parallel session has already started Phase 3 on kirana-F `phase3/pos`.

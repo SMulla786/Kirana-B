@@ -5,8 +5,8 @@ This repo (`Kirana-B`, remote `github.com/SMulla786/Kirana-B`) is the backend AP
 PostgreSQL) and holds the project memory for all repos. On 2026-11-16 the owner moved the old backend here
 (the `nk-B` folder, remote `kirana-backend`) as files only, without git history. The first commit on `main` is that import plus the Phase 0 docs.
 Reuse or change the old code as needed; it isn't sacred. Client repos are separate (DECISIONS A-013):
-`kirana-F` (web admin shell, React + Vite, built in Phase 1A/1B), `Kirana-app` (Android, empty) and
-`Kirana-desktop` (Windows POS, empty).
+`kirana-F` (web admin, React + Vite), `Kirana-app` (Android, empty) and `Kirana-desktop` (Windows POS,
+Tauri 2 + React + TS, A-026).
 
 ## Read first in every new chat
 
@@ -63,6 +63,10 @@ Tests derive their DB from `.env`'s `DATABASE_URL` with the name swapped to `kir
   `src/config/permissions.ts` (add new actions there, never check role names in routes).
 - New business-owned tables get `kiranaId` (and `storeId` when store-owned); services filter by
   `{id, kiranaId}` and check referenced ids belong to the tenant; add a cross-tenant test.
+- Stock: only through `applyMovement(tx, ctx, input)` in `src/services/kirana/stock.service.ts`, inside
+  the caller's transaction. Unit maths only through `src/utils/units.ts` (A-027).
+- Decimals at the API boundary use `decimal()`/`money()`/`quantity()` from `custom.validation.ts`
+  (exact, never rounded) and leave as fixed-dp strings.
 
 ## Domain vocabulary (current code → product term)
 
