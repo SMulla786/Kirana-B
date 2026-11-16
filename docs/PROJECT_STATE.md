@@ -49,11 +49,31 @@ parallel session wrote against the API contract on branch `phase2/tests`.
 - **Permissions:** the new `catalog.cost.view` (OWNER, MANAGER, INVENTORY_MANAGER, ACCOUNTANT) controls
   whether `purchaseCost`/`unitCost` keys appear in responses. Cashiers and staff never receive them.
 - **Removed:** the old material module, and the unmounted admin `material.service.ts` (dead code).
-- **kirana-F** (branch `phase2/catalogue`, built by a parallel session against the contract):
+- **kirana-F** (branch `phase2/catalogue` @ `aa7e8e4`, built by a parallel session against the contract):
   - Product list, form and detail; the record-stock dialog; categories and brands; CSV import preview
     and commit; a reusable `ProductSearch`.
-  - Its report: tsc ✅, vitest 68/68, build ✅.
-  - Not yet merged into kirana-F `main`, and still to be switched to the generated types.
+  - Typed from the generated `openapi.json`.
+  - Its report: tsc ✅, vitest 70/70, prettier ✅, build ✅.
+  - Not merged into kirana-F `main` yet (owner OK pending).
+- **Live pass** (2026-11-16): the API ran on :4800 against `kirana_test` with the test config, and
+  kirana-F `phase2/catalogue` on :5174, with a demo owner and cashier.
+
+  | Check                                                 | Result |
+  | ----------------------------------------------------- | ------ |
+  | GRAM product with a 500 g PACKET unit and a barcode    | ✅ PASS |
+  | OPENING 2500 g → 2,500                                 | ✅ PASS |
+  | DAMAGE 1 PACKET → 2,000 (a −500 movement)              | ✅ PASS |
+  | Second OPENING → 409 shown in the dialog               | ✅ PASS |
+  | Price change adds a history row                        | ✅ PASS |
+  | Import preview lists the row errors; no commit offered  | ✅ PASS |
+  | Cashier: no cost fields, no edit/stock/import actions  | ✅ PASS |
+  | No horizontal scroll at 375 or 1280 px                 | ✅ PASS (detail page fixed in `c2449e9`) |
+  | `ProductSearch`                                        | ⚪ N/A: not mounted until POS (unit tests only) |
+
+  - Follow-up from the pass: the dialog now offers kg on gram-base products (`aa7e8e4`). The backend
+    ledger accepts fixed metric units without a stored unit row (`Kirana-B` "Stock: accept fixed
+    metric units", tested).
+  - Not live-checked: that kg path in the browser, the list at 1280 px and the edit form at 375 px.
 
 **Phase 1 closing (2026-11-16):**
 - Pushed `Kirana-B` to `45d1b9a`; GitHub Actions CI ran on it and **passed**.
@@ -135,12 +155,12 @@ in one commit with their tests.
 | ---------------------- | ---------------------------------------- | ---------------------------------------------- |
 | Typecheck src / tests  | `npx tsc --noEmit`, `npx tsc --noEmit -p tsconfig.test.json` | ✅ 0 errors                  |
 | Lint + Prettier        | `npm run lint`                           | ✅ clean                                        |
-| Tests                  | `npm test`                               | ✅ 10 files, 114 passed (85 earlier + 24 acceptance + 5 unit-conversion) |
+| Tests                  | `npm test`                               | ✅ 10 files, 115 passed (85 earlier + 25 acceptance/ledger + 5 unit-conversion) |
+| Build                  | `npm run build`                          | ✅                                              |
 | OpenAPI                | `npm run openapi:export`                 | ✅ `openapi.json` regenerated; the staleness test passes |
 | Migration              | `npx prisma migrate deploy` / `migrate status` | ✅ 9 migrations, dev DB up to date        |
 
-Not run in this phase: `npm run build`, GitHub CI (nothing pushed), and a browser check of the new
-kirana-F screens.
+Not run: GitHub CI, because nothing is pushed.
 
 ## Phase 1 checks (run 2026-11-16, Node 24.21, npm 11.19, Prisma 5.22, TS 5.9)
 
@@ -283,7 +303,7 @@ kirana-F screens.
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **kirana-F:** switch `phase2/catalogue` to the generated types (`npm run api:types`), run the checks
-   and a browser pass at 375 and 1280 px, then merge into `main`.
+2. **kirana-F:** merge `phase2/catalogue` (`aa7e8e4`; typed, checked and live-passed) into `main`
+   once the owner OKs it.
 3. **Then, in a fresh chat:** Phase 3 (POS), using the blueprint prompt and the A-023 web-first note.
    A parallel session has already started Phase 3 on kirana-F `phase3/pos`.
