@@ -73,13 +73,15 @@ exists as local commits. **Remainder:**
 3. Generate the OpenAPI spec from zod in Kirana-B, and a typed kirana-F client from it (P-008). This
    replaces `src/api/types.ts`.
 4. Add i18n with English, Hindi and Marathi (A-024).
-5. The `Kirana-desktop` placeholder shell moved to the desktop phase at the end (A-023).
+5. ~~The `Kirana-desktop` placeholder shell moved to the end (A-023).~~ **Built 2026-11-16** at the
+   owner's request, as a Tauri 2 shell (A-026; see PROJECT_STATE). The Rust side is not compiled yet,
+   because this PC has no Rust toolchain.
 
 Settle O-4 and O-9, then clone the client repos next to the backend. In `kirana-F`, build the web
 admin shell (React + TS + Vite, P-009): login, business setup, role-aware navigation, design tokens,
 typography, spacing, buttons, forms, tables, dialogs, status/empty/error/loading states, and a typed API
-client generated from Kirana-B's OpenAPI spec (P-008). In `Kirana-desktop`, build a placeholder Electron POS
-shell with login and role routing. Give each client repo a pointer `CLAUDE.md`. `Kirana-app` waits for
+client generated from Kirana-B's OpenAPI spec (P-008). In `Kirana-desktop`, build a placeholder POS
+shell (Tauri, A-026) with login and permission routing. Give each client repo a pointer `CLAUDE.md`. `Kirana-app` waits for
 Phase 8 (O-3).
 **Done when:** each role lands in the correct workspace; layouts work at mobile, tablet and desktop widths.
 

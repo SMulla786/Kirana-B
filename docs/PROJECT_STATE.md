@@ -86,6 +86,42 @@ parallel session wrote against the API contract on branch `phase2/tests`.
 - The owner rotated the leaked credentials (O-1).
 - The final batch is pushed only after the owner's OK.
 
+## Desktop shell, Phase 1 (2026-11-16, Kirana-desktop, not pushed)
+
+A background agent built it at the owner's request, on Tauri 2 + React 19 + TS (A-026).
+
+**What it does:**
+- The Rust side owns the tokens: the access token is held in memory, and the refresh token is stored
+  in Windows Credential Manager via `keyring`.
+- Commands: `login`, `restore_session`, `logout` and `api_request`.
+  - `api_request` refreshes once on a 401 (single-flight), strips token fields from every reply, and
+    refuses the auth routes and unsafe paths.
+- Security: strict CSP, no Tauri permissions granted, a navigation guard, and `window.open` denied.
+- The UI:
+  - is keyboard-first;
+  - picks a business when the login returns 409;
+  - shows the POS placeholder ("Billing arrives in Phase 3") when the role has `pos.use`, otherwise a
+    "use the web admin" screen;
+  - uses en/hi/mr and the A-022 look.
+- The tokens, UI kit and strings are copied from kirana-F (no shared package, A-025).
+
+**Checks I re-ran:** typecheck ✅, vitest 16/16 ✅, `npm run build:web` ✅.
+
+The agent also did a headless-Chrome pass with the IPC stubbed and the production CSP. It reported 0
+console errors and 0 CSP violations, and no overflow at 200% zoom.
+
+**Not run:**
+- `cargo test`: 13 Rust tests are written.
+- `tauri dev`/`build`.
+
+This PC has no Rust/MSVC toolchain, and none was installed. Expect a first-compile fix. Commit
+`Cargo.lock` after the first build.
+
+**Open:**
+- The bundle identifier `in.kiranaos.desktop` is a placeholder and needs confirming before packaging.
+- The 409 business list returns only `{id, name}`, so two shops with the same name look identical in
+  the picker. Add the city or store name (small Kirana-B change).
+
 ## Repositories
 
 | Path                     | Git (local)                                                         | Contents                                                     |
@@ -94,7 +130,7 @@ parallel session wrote against the API contract on branch `phase2/tests`.
 | `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16)                  | Backend API + project memory                                 |
 | `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 screens merged and pushed) | Web admin (React 19 + TS + Vite)                            |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
-| `kirana/Kirana-desktop/` | Phase 1 shell in progress (Tauri 2 + React + TS, A-026)             | Windows POS                                                  |
+| `kirana/Kirana-desktop/` | `main`, 6 local commits (`46f8ad8`..`5f204a2`), **not pushed**     | Windows POS shell (Tauri 2 + React 19 + TS, A-026)          |
 
 `SMulla786/kirana-backend` (the old repo, which holds the leaked credentials) still exists on GitHub (O-1, O-17).
 
@@ -217,7 +253,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Roles / permissions        | ✅     | Server-enforced and tested; the UI only hides                                                |
 | Tenant isolation           | ✅     | Catalogue, business and members are tested cross-tenant; order/client services scoped, unrouted |
 | Web admin shell            | ✅     | A-022 look, i18n en/hi/mr, generated API types                                               |
-| Desktop POS shell          | 🟡     | Tauri 2 shell in progress (A-026); hardware is still O-4                                      |
+| Desktop POS shell          | 🟡     | Tauri 2 shell built; frontend checked; Rust never compiled (no toolchain); hardware is O-4    |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
