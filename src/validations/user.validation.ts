@@ -20,7 +20,7 @@ const registerUserSchema = z.object({
     role: z.nativeEnum(Role).optional(),
 });
 
-const loginUserSchema = z.object({ 
+const loginUserSchema = z.object({
     email: emailSchema.optional(),
     username: usernameSchema.optional(),
     password: password,
