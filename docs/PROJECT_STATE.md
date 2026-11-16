@@ -6,7 +6,7 @@ Next: see the bottom_
 
 ## Phase 2: what was built (2026-11-16)
 
-Kirana-B `ff72475` (local, not pushed). It contains the backend and the acceptance tests, which a
+Kirana-B `ff72475`, plus fixes `377a8e2` and `7694a85`; pushed 2026-11-16 with the owner's OK. It contains the backend and the acceptance tests, which a
 parallel session wrote against the API contract on branch `phase2/tests`.
 
 - **Model.** `KiranaMaterial` stays the product table (A-015: no renames). It gains:
@@ -54,7 +54,8 @@ parallel session wrote against the API contract on branch `phase2/tests`.
     and commit; a reusable `ProductSearch`.
   - Typed from the generated `openapi.json`.
   - Its report: tsc ✅, vitest 70/70, prettier ✅, build ✅.
-  - Not merged into kirana-F `main` yet (owner OK pending).
+  - Fast-forward merged into kirana-F `main` and pushed (owner OK, 2026-11-16). On `main` after the
+    merge: tsc ✅, vitest 70/70 ✅, build ✅.
 - **Live pass** (2026-11-16): the API ran on :4800 against `kirana_test` with the test config, and
   kirana-F `phase2/catalogue` on :5174, with a demo owner and cashier.
 
@@ -90,8 +91,8 @@ parallel session wrote against the API contract on branch `phase2/tests`.
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main`; `origin/main` = `dbb3b66`; `14899e4` and the Phase 2 commits are local, **not pushed** | Backend API + project memory |
-| `kirana/kirana-F/`       | `main` = `origin/main` `04d6ec4`; Phase 2 screens on local branch `phase2/catalogue` | Web admin (React 19 + TS + Vite)      |
+| `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16)                  | Backend API + project memory                                 |
+| `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 screens merged and pushed) | Web admin (React 19 + TS + Vite)                            |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
 | `kirana/Kirana-desktop/` | Phase 1 shell in progress (Tauri 2 + React + TS, A-026)             | Windows POS                                                  |
 
@@ -160,7 +161,7 @@ in one commit with their tests.
 | OpenAPI                | `npm run openapi:export`                 | ✅ `openapi.json` regenerated; the staleness test passes |
 | Migration              | `npx prisma migrate deploy` / `migrate status` | ✅ 9 migrations, dev DB up to date        |
 
-Not run: GitHub CI, because nothing is pushed.
+GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typecheck, lint, tests).
 
 ## Phase 1 checks (run 2026-11-16, Node 24.21, npm 11.19, Prisma 5.22, TS 5.9)
 
@@ -218,7 +219,7 @@ Not run: GitHub CI, because nothing is pushed.
 | Web admin shell            | ✅     | A-022 look, i18n en/hi/mr, generated API types                                               |
 | Desktop POS shell          | 🟡     | Tauri 2 shell in progress (A-026); hardware is still O-4                                      |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
-| Catalogue / units / stock  | ✅     | Phase 2 backend; web screens on `phase2/catalogue` (not merged yet)                          |
+| Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
@@ -296,14 +297,11 @@ Not run: GitHub CI, because nothing is pushed.
 ## Next action
 
 1. **Owner:**
-   - Approve pushing Kirana-B (`14899e4` and the Phase 2 commits) and merging kirana-F `phase2/catalogue`.
-   - Confirm Kirana-B should be public.
+   - Make Kirana-B private, if that's still the plan; it was public at the last check.
    - Archive or delete `kirana-backend`.
    - Back up `prisma/migrations/`, which now has 9 migrations.
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **kirana-F:** merge `phase2/catalogue` (`aa7e8e4`; typed, checked and live-passed) into `main`
-   once the owner OKs it.
-3. **Then, in a fresh chat:** Phase 3 (POS), using the blueprint prompt and the A-023 web-first note.
+2. **Then, in a fresh chat:** Phase 3 (POS), using the blueprint prompt and the A-023 web-first note.
    A parallel session has already started Phase 3 on kirana-F `phase3/pos`.
