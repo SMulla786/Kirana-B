@@ -20,8 +20,10 @@
         "build": "tsc",
         "start": "node -r module-alias/register --env-file=.env dist/index.js",
         "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register --env-file=.env src/index.ts",
-        "lint": "eslint src/**/*.{ts,tsx}",
-        "lint:fix": "eslint src/**/*.{ts,tsx} --fix",
+        "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" vitest.config.ts",
+        "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" vitest.config.ts --fix",
+        "test": "vitest run",
+        "test:watch": "vitest",
         "prettier": "prettier --check **/*.ts",
         "prettier:fix": "prettier --write **/*.ts",
         "format": "prettier --write src/**/*.{ts,tsx,js,jsx,json,css,md,mjs}",
@@ -89,6 +91,7 @@
         "@types/multer": "^1.4.12",
         "@types/node": "^22.5.1",
         "@types/nodemailer": "^6.4.15",
+        "@types/supertest": "^7.2.1",
         "@types/swagger-jsdoc": "^6.0.4",
         "@types/swagger-ui-express": "^4.1.6",
         "@types/xss-filters": "^0.0.30",
@@ -101,8 +104,10 @@
         "lint-staged": "^15.2.9",
         "prettier": "^3.3.3",
         "prisma": "^5.21.1",
+        "supertest": "^7.3.2",
         "ts-node-dev": "^2.0.0",
         "tsconfig-paths": "^4.2.0",
-        "typescript": "^5.5.4"
+        "typescript": "^5.5.4",
+        "vitest": "^5.1.0"
     }
 }
