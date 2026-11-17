@@ -220,6 +220,36 @@ describe('catalogue units and stock quantities', () => {
         await patch({salesUnit: 'BOX'}).expect(400);
         await patch({salesUnit: 'BOX', sellingPrice: 50, mrp: 60}).expect(200);
     });
+
+    it('stores implied fixed metric units used as sales, purchase or barcode units', async () => {
+        const {token} = await createOwner();
+        const factors = (p: Body) =>
+            Object.fromEntries(
+                (p.units as {unit: string; factor: string}[]).map((u) => [u.unit, u.factor]),
+            );
+        const p = await createProduct(token, {baseUnit: 'GRAM', salesUnit: 'KILOGRAM'});
+        expect(factors(p)).toEqual({GRAM: '1', KILOGRAM: '1000'});
+
+        const code = uniqueName('bc');
+        const q = await createProduct(token, {
+            baseUnit: 'MILLILITRE',
+            barcodes: [{code, unit: 'LITRE'}],
+        });
+        expect(factors(q)).toEqual({MILLILITRE: '1', LITRE: '1000'});
+        const hit = await api.get(`${CAT}/lookup?code=${code}`).set(bearer(token)).expect(200);
+        expect(hit.body.data).toMatchObject({unit: 'LITRE', factor: '1000'});
+
+        const r = await createProduct(token, {baseUnit: 'GRAM'});
+        const patched = await api
+            .patch(`${CAT}/products/${r.id}`)
+            .set(bearer(token))
+            .send({purchaseUnit: 'KILOGRAM', purchaseCost: 40})
+            .expect(200);
+        expect(factors(patched.body.data)).toEqual({GRAM: '1', KILOGRAM: '1000'});
+        // Pack and cross-dimension units still need an explicit, valid factor.
+        await createProduct(token, {baseUnit: 'GRAM', salesUnit: 'PACKET'}, 400);
+        await createProduct(token, {baseUnit: 'GRAM', salesUnit: 'LITRE'}, 400);
+    });
 });
 
 describe('catalogue price history', () => {

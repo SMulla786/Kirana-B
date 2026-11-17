@@ -92,8 +92,17 @@ export const checkStructure = (s: Structure) => {
         if (typeof factor === 'string') errors.push({field: `units.${i}.factor`, message: factor});
         else units.set(u.unit, factor);
     });
+    // A referenced unit with a fixed metric factor (kg on a gram base) is added and stored, so
+    // `units` and lookups always carry its factor, as the ledger already accepts it.
+    const known = (unit: UnitCode) => {
+        if (units.has(unit)) return true;
+        const fixed = resolveFactor(s.baseUnit, unit);
+        if (typeof fixed === 'string') return false;
+        units.set(unit, fixed);
+        return true;
+    };
     for (const field of ['salesUnit', 'purchaseUnit'] as const) {
-        if (!units.has(s[field])) {
+        if (!known(s[field])) {
             errors.push({field, message: `${s[field]} is not one of this product's units`});
         }
     }
@@ -106,7 +115,7 @@ export const checkStructure = (s: Structure) => {
             });
         }
         seen.add(b.code);
-        if (!units.has(b.unit)) {
+        if (!known(b.unit)) {
             errors.push({
                 field: `barcodes.${i}.unit`,
                 message: `${b.unit} is not one of this product's units`,
@@ -412,7 +421,8 @@ class CatalogService {
                 },
                 id,
             );
-            if (units) {
+            // Also rewrite when checkStructure added an implied metric unit.
+            if (units || nextUnits.length !== existing.units.length) {
                 await tx.productUnit.deleteMany({where: {productId: id}});
                 await tx.productUnit.createMany({
                     data: nextUnits.map((u) => ({...u, productId: id})),
