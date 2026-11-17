@@ -1,0 +1,86 @@
+# Phase 3 POS review (2026-11-17)
+
+This is an independent, read-only review of `phase3/pos`: Kirana-B @ `09fd5c2` (from `f0b6c90`) and
+kirana-F @ `53a8513` (from `aa7e8e4`). It was done by reading the code; no tests were run.
+
+Two findings, #2 and #3, were re-checked against the branch code and confirmed.
+
+**Verdict:** the backend is sound on tenancy, strict schemas, server-side price snapshots,
+permissions, held bills never touching stock or sales, and the two-till recall race. **Do not merge
+until items 1–6 are fixed.**
+
+## Must fix before merge
+
+1. **Back-to-back scans in the search box are lost** (`kirana-F src/catalog/ProductSearch.tsx:77-93`).
+   - `lookup()` clears the box only after the response arrives, and the `seq` check throws away older
+     results.
+   - With about 400 ms latency, three scans 300 ms apart concatenate into one code: a 404, no item
+     added, and garbage left in the box.
+   - Fix: copy the code and clear the box before the `await`. Handle every lookup result; keep `seq`
+     for the typeahead only.
+   - Add a test that scans into the focused search box.
+2. **Tile and dialog prices are multiplied by the sales-unit factor** (`ProductGrid.tsx:35`,
+   `Dialogs.tsx:18-21`). `scalePaise(selling, factor)` is called without `salesFactor`, but
+   `sellingPrice` is already per sales unit.
+   - Example: gram-base atta sold at ₹45/kg shows "₹45,000.00 / kg". The quantity dialog previews
+     ₹22.50 for 0.5 g, but the cart charges ₹0.03.
+   - Fix: the tile shows `selling` as is. The dialogs reuse cart's `priceFor(selling, factor,
+     salesFactor)`.
+   - Add tests with `salesUnit ≠ baseUnit`.
+3. **The per-unit price is rounded before the quantity multiplies it**, on both the server
+   (`heldBill.service.ts:128-131`, `round2(sellingPrice×factor/salesFactor)`) and the client
+   (`money.ts:28-32`, `cart.ts:70`).
+   - Example: 750 g at ₹45/kg bills ₹37.50 instead of ₹33.75; at ₹44/kg it bills ₹30.00 instead
+     of ₹33.00.
+   - It is also a loophole: a cashier can pick a smaller unit to get an unapproved effective
+     discount.
+   - Fix: never round the derived unit price. Compute `gross = round2(qty × factor × sellingPrice /
+     salesFactor)` with Decimal on the server and BigInt on the client. Store `unitPrice` at 4–6 dp,
+     or store the sales-unit price plus the factor.
+   - Amend A-028 to match.
+4. **Scans are silently dropped or replace an open dialog** (`Pos.tsx:117-120, 128-145`).
+   - `if (dialog) return;` drops a scan made while the quantity dialog is open (an undercharge).
+   - A lookup that resolves after a dialog opens replaces it.
+   - Fix: queue the scan, or show a notice. Check `dialog` when the lookup resolves.
+5. **Changing a line's unit loses focus and moves the selection** (`CartPanel.tsx:206-208`,
+   `cart.ts:94-115`).
+   - The React key is `productId:unit`, and `setUnit` changes it, so the line remounts. Focus drops to
+     `<body>` and `selected` falls back to the last line.
+   - Example: a following Delete removes the wrong line.
+   - Fix: give each line a stable `id` for the React key and the selection. Keep `key` only for
+     merging.
+6. **Recall deletes the server copy before the client has it, and hold isn't idempotent**
+   (`heldBill.service.ts:192-200`, `Pos.tsx:148-182`).
+   - A lost recall response, or a closed window, loses the bill.
+   - A lost hold response plus a retry duplicates it.
+   - Fix: recall *claims* the bill (`recalledAt`, `recalledBySessionId`; a repeat recall by the same
+     session returns it; claimed bills are hidden from the list). Delete it when the bill is
+     re-held or sold.
+   - Add an `idempotencyKey` on hold, as stock movements have.
+
+## Nice to have
+
+- **Loose products:** a pre-packed barcode on a loose product always opens the weight dialog. Decide
+  by the scanned unit (`isLooseUnit(unit)`), not `product.isLoose`.
+- **Unpriced products:** the client sends `unitPrice:"0.00"` for them, so a manager silently holds the
+  line at ₹0 and a cashier gets a misleading 403.
+- **Recall errors:** "Hold first" closes the dialog, so a later recall error is never shown.
+- **Recall transaction:** `serialize()` runs inside the recall transaction on the global client.
+  Serialize after the commit.
+- **Held-bill list:** it stops at 200 rows with no paging or expiry.
+- **Stale recalled lines:** a recalled line whose unit or factor changed shows a stale unit and price.
+- **Scanner edge cases:** short bursts into guarded fields; scans into unguarded dialog fields; and
+  the typeahead's active item winning over a scanned code.
+- **Large quantities:** there's no quantity cap, so `paise × milli` can pass 2^53.
+
+## Acceptance (Phase 3 Definition of Done)
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Scanner, search and grid, without leaving the POS | Not met under real latency (#1, #4) |
+| 2 | Repeated scans increment | Not met: the reducer is right but scans are lost (#1, #4) |
+| 3 | Weighted products | Partly met: quantities and units work, prices are wrong (#2, #3) |
+| 4 | Totals after edits | Partly met: correct except lines below the sales unit (#3) |
+| 5 | Held bills don't touch stock, sales or balances | Met, except loss or duplication on a dropped response (#6) |
+| 6 | Keyboard without focus loss | Partly met (#5) |
+| 7 | Price and discount permissions | Met on the server, except the rounding loophole (#3) |
