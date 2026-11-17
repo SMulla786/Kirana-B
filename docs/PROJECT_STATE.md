@@ -86,42 +86,38 @@ parallel session wrote against the API contract on branch `phase2/tests`.
 - The owner rotated the leaked credentials (O-1).
 - The final batch is pushed only after the owner's OK.
 
-## Desktop shell, Phase 1 (2026-11-16, Kirana-desktop, not pushed)
+## Desktop app (Kirana-desktop, not pushed)
 
-A background agent built it at the owner's request, on Tauri 2 + React 19 + TS (A-026).
+**2026-11-17 — the desktop wraps kirana-F (A-029, owner's choice).**
+- `Kirana-desktop` `766dece` is now only the Tauri 2 shell: Rust window, guards, CSP and the token
+  commands. It builds `../kirana-F` and loads its `dist`; in development it loads kirana-F's Vite
+  server on port 1420.
+- The copied React UI, i18n and UI kit were removed (38 files), so web and desktop now share one UI,
+  including the Phase 3 POS.
+- kirana-F `desktop/tauri-transport` (`8b16861`, `e1096ae`; local, based on `main`): inside Tauri,
+  `src/api/client.ts` calls `invoke('api_request' | 'login' | 'logout')`, and startup calls
+  `restore_session`. The web path is unchanged. It adds `@tauri-apps/api` 2.12.4 (pinned).
+  - Checks: tsc ✅, vitest 74/74 ✅ (4 new IPC tests), prettier ✅, build ✅.
+- kirana-F's build was checked against the desktop CSP: no inline scripts or styles, no remote loads.
+- `npx tauri info` parses the config (frontendDist `../../kirana-F/dist`, devUrl `:1420`).
 
-**What it does:**
+**From the Phase 1 shell (2026-11-16, still true):**
 - The Rust side owns the tokens: the access token is held in memory, and the refresh token is stored
   in Windows Credential Manager via `keyring`.
-- Commands: `login`, `restore_session`, `logout` and `api_request`.
-  - `api_request` refreshes once on a 401 (single-flight), strips token fields from every reply, and
-    refuses the auth routes and unsafe paths.
-- Security: strict CSP, no Tauri permissions granted, a navigation guard, and `window.open` denied.
-- The UI:
-  - is keyboard-first;
-  - picks a business when the login returns 409;
-  - shows the POS placeholder ("Billing arrives in Phase 3") when the role has `pos.use`, otherwise a
-    "use the web admin" screen;
-  - uses en/hi/mr and the A-022 look.
-- The tokens, UI kit and strings are copied from kirana-F (no shared package, A-025).
+- `api_request` refreshes once on a 401 (single-flight), strips token fields from every reply, and
+  refuses the auth routes and unsafe paths.
+- Strict CSP, no Tauri permissions granted, a navigation guard, and `window.open` denied.
 
-**Checks I re-ran:** typecheck ✅, vitest 16/16 ✅, `npm run build:web` ✅.
-
-The agent also did a headless-Chrome pass with the IPC stubbed and the production CSP. It reported 0
-console errors and 0 CSP violations, and no overflow at 200% zoom.
-
-**Not run:**
-- `cargo test`: 13 Rust tests are written.
-- `tauri dev`/`build`.
-
-This PC has no Rust/MSVC toolchain, and none was installed. Expect a first-compile fix. Commit
-`Cargo.lock` after the first build.
+**Not run:** `cargo test` (13 Rust tests are written), `tauri dev` and `tauri build`. This PC has no
+Rust/MSVC toolchain, and none was installed. Expect a first-compile fix. Commit `Cargo.lock` after
+the first build.
 
 **Open:**
 - The bundle identifier `in.kiranaos.desktop` is a placeholder and needs confirming before packaging.
 - The 409 business list returns only `{id, name}`, so two shops with the same name look identical in
   the picker. Add the city or store name (small Kirana-B change).
-
+- On desktop, a role without `pos.use` now sees the full kirana-F app, not the old "use the web admin"
+  screen.
 ## Repositories
 
 | Path                     | Git (local)                                                         | Contents                                                     |
@@ -130,7 +126,7 @@ This PC has no Rust/MSVC toolchain, and none was installed. Expect a first-compi
 | `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16)                  | Backend API + project memory                                 |
 | `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 screens merged and pushed) | Web admin (React 19 + TS + Vite)                            |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
-| `kirana/Kirana-desktop/` | `main`, 6 local commits (`46f8ad8`..`5f204a2`), **not pushed**     | Windows POS shell (Tauri 2 + React 19 + TS, A-026)          |
+| `kirana/Kirana-desktop/` | `main` `766dece`, 7 local commits, **not pushed**                  | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
 `SMulla786/kirana-backend` (the old repo, which holds the leaked credentials) still exists on GitHub (O-1, O-17).
 
@@ -253,7 +249,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Roles / permissions        | ✅     | Server-enforced and tested; the UI only hides                                                |
 | Tenant isolation           | ✅     | Catalogue, business and members are tested cross-tenant; order/client services scoped, unrouted |
 | Web admin shell            | ✅     | A-022 look, i18n en/hi/mr, generated API types                                               |
-| Desktop POS shell          | 🟡     | Tauri 2 shell built; frontend checked; Rust never compiled (no toolchain); hardware is O-4    |
+| Desktop POS shell          | 🟡     | Tauri shell wraps kirana-F (A-029); Rust never compiled (no toolchain); hardware is O-4       |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
