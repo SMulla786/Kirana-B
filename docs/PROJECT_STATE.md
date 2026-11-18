@@ -1,9 +1,63 @@
 # Project state
 
-_Last updated 2026-11-18 · **Phase 3 (web POS) is merged locally on `main`** in Kirana-B (`5c9c869`) and
-kirana-F (`5799510`), with the review and live-pass fixes, and the live re-pass is green. **Not pushed:** it waits for the
-owner's OK. Phase 2 is merged and pushed. The desktop shell (Tauri,
-A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
+_Last updated 2026-11-18 · **Phase 4 (checkout, payments, invoices, receipts, returns) is built on branches**
+Kirana-B `phase4/sales` and kirana-F `phase4/web`, tests green, live pass running; not merged or pushed.
+Phases 1–3 are pushed (`main`: Kirana-B `e3aec03`, kirana-F `5799510`, Kirana-desktop `766dece`). The desktop
+shell (Tauri, A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
+
+## Phase 4: what was built (2026-11-18)
+
+The model is DECISIONS A-030. Built by three sessions in parallel against one contract committed first
+(`fbebf83`): the sale core (kirana-6b), sales history and returns (kirana-ca, merged from `phase4/returns`)
+and the web screens (kirana-44, `phase4/web`).
+
+**Kirana-B `phase4/sales`** (on `main` `e3aec03`):
+- **Schema** (migration `20261118160000_phase4_sales`): `Sale`, `SaleLine`, `SalePayment`, `SaleReturn`,
+  `SaleReturnLine`, `CustomerLedgerEntry`, `CustomerBalance`, `DocumentSeries`; enums `GstScheme`,
+  `RoundOffRule`, `PaymentMethod`, `PaymentStatus`, `DocumentKind`, `ReturnDisposition`,
+  `CustomerEntryType`; `kirana.gstScheme` / `roundOff` / `invoicePrefix`. Links from financial records
+  are `ON DELETE RESTRICT`.
+- **Endpoints:**
+  - `POST /pos/checkout` (`pos.use`): the server's checkout review: lines with tax, totals, round-off,
+    payable. Writes nothing.
+  - `POST /pos/sales` (`pos.use`; CREDIT also needs `pos.credit`): completes a sale atomically; 201, or 200
+    with the same sale on an `idempotencyKey` replay.
+  - `GET /sales`, `GET /sales/:id` (`sales.view`): history (q, IST `from`/`to` days, paging) and the invoice
+    with payments, returns, returned quantities and stock movement ids.
+  - `POST /sales/:id/returns` (`sales.return`): a credit note; 201, or 200 on replay; 409 on over-return.
+  - `PATCH /business`: `gstScheme`, `roundOff`, `invoicePrefix`; a scheme other than UNREGISTERED needs a
+    GSTIN, checked after the update (so the GSTIN can't be cleared under it either).
+- **Code:** `src/services/kirana/pricing.ts` (`priceLines`, shared with held bills; `taxLine`),
+  `billing.ts` (`financialYearOf`, `nextDocumentNo`, `applyRoundOff`, `applyCustomerEntry`),
+  `sale.service.ts`, `saleReturn.service.ts`; `sale.validation.ts`; `sale.controller.ts`, `sales.routes.ts`.
+- **Integrity:**
+  - The invoice number comes from a locked counter row taken first, so a store's sales are ordered and
+    a rolled-back sale gives its number back. Stock rows are locked in product order (sales and returns),
+    so they never deadlock.
+  - Concurrent retries with one key replay the winner (sales, returns, and now stock movements).
+  - A damaged return's write-off leg may go below zero (net zero with its SALE_RETURN).
+  - A return restocks at the sale line's snapshot factor (a later pack-size change doesn't alter it).
+- **Also on this branch:** vitest `testTimeout` 30 s (DB-backed tests timed out at 5 s under load).
+
+**kirana-F `phase4/web`** (on `main` `5799510`; kirana-44):
+- **Checkout (F10 / button):** opens on the server preview; tax rows only for REGULAR; split payment rows
+  prefilled with the remaining balance; cash tendered and change; UPI labelled "Recorded by cashier · not
+  bank-confirmed"; Credit only with `pos.credit` and a customer; Complete only when the rows add up
+  exactly; one `idempotencyKey` per opening; server errors shown on their row or line.
+- **Receipt:** TAX INVOICE / BILL OF SUPPLY / RECEIPT by scheme; print via `window.print()` at 80 mm;
+  share via `navigator.share` or the clipboard; "Sale saved; if printing fails, reprint from Sales history".
+- **Sales** (`/sales`, `/sales/:id`): filters in the URL, paging, invoice detail, reprint, and a return
+  dialog (quantity limits, RESTOCK/DAMAGED, reason, refund method).
+- **Business settings:** GST scheme, round-off and invoice prefix.
+
+**Checks** (2026-11-18):
+
+| Repo     | Command                                                  | Result                         |
+| -------- | -------------------------------------------------------- | ------------------------------ |
+| Kirana-B | `npx tsc --noEmit`, `-p tsconfig.test.json`, `npm run lint` | ✅ clean (`e29ba5f`)        |
+| Kirana-B | `npm test` (`kirana_test`)                               | ✅ 15 files, 154 passed (`e29ba5f`) |
+| kirana-F | tsc, prettier, `vitest run`, build (reported by kirana-44) | ✅ 29 files, 175 passed (`3878553`) |
+| Live     | Browser pass on `kirana_p4live_test` (kirana-44)         | ⏳ running                      |
 
 ## Phase 3: what was built (2026-11-16)
 
@@ -222,10 +276,10 @@ the first build.
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main` `5c9c869` + docs, Phase 3 merged, **not pushed**              | Backend API + project memory                       |
-| `kirana/kirana-F/`       | `main` `5799510`, Phase 3 + desktop transport merged, **not pushed** | Web admin + desktop UI (React 19 + TS + Vite)      |
+| `kirana/Kirana-B/`       | `main` `e3aec03` = `origin/main` (Phase 3 pushed); local `phase4/sales` | Backend API + project memory                       |
+| `kirana/kirana-F/`       | `main` `5799510` = `origin/main` (Phase 3 pushed); local `phase4/web`  | Web admin + desktop UI (React 19 + TS + Vite)      |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
-| `kirana/Kirana-desktop/` | `main` `766dece`, 7 local commits, **not pushed**                  | Tauri 2 shell around kirana-F (A-026, A-029)                 |
+| `kirana/Kirana-desktop/` | `main` `766dece` = `origin/main` (first push 2026-11-18)            | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
 `SMulla786/kirana-backend` (the old repo, which holds the leaked credentials) still exists on GitHub (O-1, O-17).
 
@@ -313,6 +367,9 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 
 ## Migrations
 
+- **Phase 4:** `prisma/migrations/20261118160000_phase4_sales/`, generated with `migrate diff` and
+  reviewed: additive only (new enums and tables; three `kirana` columns with defaults UNREGISTERED,
+  NEAREST_1, `INV`; no DROP, no SET NULL). Applied to the dev DB `kirana` on 2026-11-18, no drift.
 - **Phase 3:** `prisma/migrations/20261116200000_phase3_pos/`. It's additive only:
   - `KiranaMaterial."isFavourite" BOOLEAN NOT NULL DEFAULT false`;
   - a `HeldBill` table (with `idempotencyKey`, `claimKey` and `claimedAt`), with an index on
@@ -363,7 +420,8 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | POS (web): cart, scan, held bills | ✅ | Phase 3 merged locally and live-passed; push pending                               |
-| Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
+| Checkout, invoices, returns | 🟡    | Phase 4 built on branches (A-030); live pass and merge pending                               |
+| Udhaar, purchasing         | ⚠️/❌  | Credit sales post a customer ledger (Phase 4); statements, collections, purchasing → Phases 5–6. Old order/wallet tables stay unrouted (P-011) |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
 ## Known gaps and risks
@@ -432,6 +490,16 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
     - **Shortcut:** `src/docs/openapi.ts` emits nullable registered refs as `allOf + nullable`, and
       openapi-typescript drops the null. kirana-F restores it in `src/pages/pos/types.ts` (marked
       `shortcut:`).
+12. **Phase 4 gaps:**
+    - **Defaults to confirm (A-030):** GST scheme UNREGISTERED, round-off to ₹1, prefix INV. A CA should
+      confirm the REGULAR tax-invoice layout and HSN rules before a GST pilot (O-8). No IGST, e-invoice or
+      e-way bill. A product without `gstRate` is taxed at 0% under REGULAR.
+    - **UPI:** recorded only; no gateway (O-10). **Offline numbering:** open (O-11, desktop phase).
+    - **Printing:** browser/webview print only; no ESC/POS driver, cash drawer or 58 mm default (O-4).
+    - **Credit:** no credit limit, statements or collections yet (Phase 5).
+    - **Zero-total sales** can't complete: every payment row must be above ₹0.
+    - **Old tables:** `order`, `orderItem`, `clientWallet*` are untouched and unrouted (P-011).
+    - **hi/mr** strings for checkout and sales are machine-drafted.
 
 ## Manual verification
 
@@ -481,9 +549,9 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **Phase 3 finish:** merged locally, with the migrations applied (2026-11-18).
-   - With the owner's OK, push Kirana-B and kirana-F `main` (and Kirana-desktop), then confirm CI is green.
-   - The desktop app has never compiled. Installing Rust + MSVC is the owner's decision.
-3. **Then, in a fresh chat:** Phase 4 (checkout, payments, invoices, receipts, returns). Use the blueprint
-   prompt, posting stock through `applyMovement(... type 'SALE')`. Settle O-8 (GST registration) and O-10
-   (trusted UPI) first.
+   - Confirm the Phase 4 defaults (A-030) and settle O-8 (GST, with a CA), O-10 (UPI gateway) and O-11.
+2. **Phase 4 finish:** record kirana-44's live pass, fix what it finds, merge `phase4/sales` and
+   `phase4/web` into `main`, and push with the owner's OK (CI green). The desktop app has never compiled:
+   installing Rust + MSVC is the owner's decision.
+3. **Then, in a fresh chat:** Phase 5 (customers, udhaar and the customer ledger), building on
+   `CustomerLedgerEntry`/`CustomerBalance` and `applyCustomerEntry` from Phase 4.
