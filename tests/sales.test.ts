@@ -70,6 +70,8 @@ describe('sales history', () => {
         expect(page2.body.data.items.map((i: {id: string}) => i.id)).toEqual([old.id]);
         await list(s.token, {pageSize: 500}).expect(400);
         await list(s.token, {from: '18-11-2026'}).expect(400);
+        await list(s.token, {to: '2026-02-30'}).expect(400); // not a real day
+        await list(s.token, {from: '2026-13-01'}).expect(400);
     });
 
     it('shows a real sale on the invoice detail with what was returned', async () => {

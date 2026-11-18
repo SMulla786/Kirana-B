@@ -5,7 +5,13 @@ import posValidation from './pos.validation';
 
 const id = z.string().uuid('Invalid ID format.');
 const key = z.string().trim().min(8).max(100);
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+const day = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+    // The regex alone lets 2026-02-30 through, and Date would roll it over into March.
+    .refine((d) => !Number.isNaN(Date.parse(d)) && new Date(d).toISOString().startsWith(d), {
+        message: 'Not a real date',
+    });
 
 /** The cart as the POS holds it: same line shape as a held bill, priced by the server. */
 const checkoutSchema = z
