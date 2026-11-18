@@ -18,6 +18,7 @@ const posContext = (req: Request) => {
         canDiscount: hasPermission(role, 'pos.discount'),
         canOverridePrice: hasPermission(role, 'pos.price.override'),
         canCredit: hasPermission(role, 'pos.credit'),
+        canOverrideCredit: hasPermission(role, 'pos.credit.override'),
     };
 };
 

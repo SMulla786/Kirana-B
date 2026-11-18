@@ -3,7 +3,8 @@ import {GstScheme, Prisma, RoundOffRule} from '@prisma/client';
 import prisma from 'client';
 import ApiError from '@utils/ApiError';
 import {saleValidation} from '@validations/index';
-import {applyCustomerEntry, applyRoundOff, nextDocumentNo} from './billing';
+import {applyCustomerEntry, applyRoundOff, lockCustomerBalance, nextDocumentNo} from './billing';
+import {creditOf} from './customer.service';
 import {priceLines, taxLine, TaxedLine} from './pricing';
 import {applyMovement} from './stock.service';
 
@@ -22,6 +23,7 @@ export type SaleContext = {
     canDiscount: boolean;
     canOverridePrice: boolean;
     canCredit: boolean;
+    canOverrideCredit: boolean;
 };
 
 type Business = {
@@ -48,13 +50,32 @@ const businessOf = (kiranaId: string): Promise<Business> =>
         },
     });
 
+/** The bill's customer with their credit position; an archived customer takes no new bills (A-031). */
 async function assertCustomer(kiranaId: string, customerId: string | null | undefined) {
-    if (!customerId) return;
+    if (!customerId) return null;
     const c = await prisma.client.findFirst({
         where: {id: customerId, kiranaId},
-        select: {id: true},
+        select: {
+            id: true,
+            name: true,
+            phoneNumber: true,
+            isActive: true,
+            creditLimit: true,
+            balance: {select: {balance: true}},
+        },
     });
     if (!c) throw new ApiError(404, 'Customer not found');
+    if (!c.isActive) {
+        const message = 'This customer is archived';
+        throw new ApiError(409, message, [{field: 'customerId', message}]);
+    }
+    return {
+        id: c.id,
+        name: c.name,
+        phoneNumber: c.phoneNumber,
+        isActive: c.isActive,
+        ...creditOf(c.balance?.balance ?? D(0), c.creditLimit),
+    };
 }
 
 /** Prices and taxes the cart on the server, then totals it under the business's round-off rule. */
@@ -132,6 +153,39 @@ function checkPayments(ctx: SaleContext, input: CompleteInput, total: Decimal) {
         ]);
     }
     return {change, credit};
+}
+
+/**
+ * Refuses credit that takes the customer past their limit, read under the balance row lock so two
+ * tills can't both pass. With overrideCreditLimit and pos.credit.override it goes through, and the
+ * returned reason is kept on the CREDIT_SALE entry.
+ */
+async function checkCreditLimit(
+    tx: Prisma.TransactionClient,
+    ctx: SaleContext,
+    input: CompleteInput,
+    credit: Decimal,
+) {
+    const customerId = input.customerId!;
+    const before = await lockCustomerBalance(tx, ctx.kiranaId, customerId);
+    const {creditLimit} = await tx.client.findUniqueOrThrow({
+        where: {id: customerId},
+        select: {creditLimit: true},
+    });
+    const after = before.add(credit);
+    if (!creditLimit || after.lte(creditLimit)) return undefined;
+    const over = after.sub(creditLimit).toFixed(2);
+    if (!input.overrideCreditLimit) {
+        const message = `Over the credit limit by ${over}`;
+        throw new ApiError(409, message, [
+            {field: 'payments', message, ...creditOf(before, creditLimit)},
+        ]);
+    }
+    if (!ctx.canOverrideCredit) {
+        const message = 'You cannot sell beyond the credit limit';
+        throw new ApiError(403, message, [{field: 'overrideCreditLimit', message}]);
+    }
+    return `Over the credit limit of ${creditLimit.toFixed(2)} by ${over}`;
 }
 
 export const returnInclude = {
@@ -231,13 +285,14 @@ class SaleService {
     /** The checkout review: server prices, tax, round-off and payable. Writes nothing. */
     async preview(ctx: SaleContext, input: CheckoutInput) {
         const business = await businessOf(ctx.kiranaId);
-        await assertCustomer(ctx.kiranaId, input.customerId);
+        const customer = await assertCustomer(ctx.kiranaId, input.customerId);
         const bill = await buildBill(ctx, input, business);
         return {
             gstScheme: business.gstScheme,
             roundOffRule: business.roundOff,
             lines: bill.lines.map(lineOut),
             ...totalsOut(bill),
+            customer,
         };
     }
 
@@ -361,6 +416,7 @@ class SaleService {
                         });
                     }
                     if (credit.gt(0)) {
+                        const reason = await checkCreditLimit(tx, ctx, input, credit);
                         await applyCustomerEntry(tx, {
                             kiranaId: ctx.kiranaId,
                             customerId: input.customerId!,
@@ -368,6 +424,7 @@ class SaleService {
                             type: 'CREDIT_SALE',
                             amount: credit,
                             saleId: sale.id,
+                            reason,
                         });
                     }
                     return sale.id;
