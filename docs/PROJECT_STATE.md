@@ -1,9 +1,93 @@
 # Project state
 
-_Last updated 2026-11-18 · **Phase 4 (checkout, payments, invoices, receipts, returns) is done, merged and
-pushed** (`main`: Kirana-B, kirana-F `5ca992d`), with the live-pass fixes D1–D6. Its defaults (A-030) await the
-owner's confirmation. Kirana-desktop `main` is `766dece`. The desktop shell (Tauri, A-026/A-029) wraps kirana-F
-and has never been compiled. Next: see the bottom_
+_Last updated 2026-11-19 · **Phase 5 (customers, udhaar ledger, credit limits, collections) is done, merged
+and pushed** (`main`: Kirana-B, kirana-F). Phase 4 and its owner-confirmed defaults (A-030) are done.
+Kirana-desktop `main` is `766dece`. The desktop shell (Tauri, A-026/A-029) wraps kirana-F and has never been
+compiled. Next: Phase 6 (see the bottom)_
+
+## Phase 5: what was built (2026-11-19)
+
+The model is DECISIONS A-031. Three sessions built against one contract committed first (`40973bc`):
+customers, credit limit and reversals (kirana-6b), statement, dues and collections (kirana-ca, merged from
+`phase5/ledger`) and the web screens (kirana-44, `phase5/web`, two halves merged from `phase5/web-a`/`-b`).
+
+**Kirana-B `phase5/customers`:**
+- **Schema** (migration `20261118200000_phase5_customer_ledger`):
+  - `client` gains `creditLimit`, `isActive`, `notes`, `tags`.
+  - `kirana.upiId` holds the shop's VPA for the static QR (O-10).
+  - New tables `CustomerPayment` (receipt `RCPT/yy-yy/nnnnn`, `DocumentKind` `PAYMENT_RECEIPT`) and
+    `CustomerPaymentAllocation`.
+  - `CustomerLedgerEntry` gains `paymentId`, `reversesId` (unique), `reason` and `idempotencyKey`.
+  - The new entry types are `OPENING_BALANCE`, `PAYMENT`, `ADJUSTMENT` and `REVERSAL`.
+  - The unique index on `(kiranaId, phoneNumber)` is dropped and replaced by a plain index, so one family
+    phone can carry several names. This is the one DROP, approved by the owner.
+  - A backfill gives every existing customer a 0 balance row.
+- **Endpoints** (`/customers`):
+
+  | Method and path | Permission | Notes |
+  | --------------- | ---------- | ----- |
+  | `GET /` | `customers.view` | `q`, `tag`, `status`, `due`, sort `name`/`outstanding`/`recent` |
+  | `POST /` | `customers.manage` | A second name on a used phone needs `sharedPhone: true`. The same name twice on one phone is refused. |
+  | `GET /:id` | `customers.view` | |
+  | `PATCH /:id` | `customers.manage` | Archive with `isActive: false`. `creditLimit` also needs `customers.credit`. |
+  | `POST /:id/adjustments` | `customers.credit` | `OPENING_BALANCE` once unless reversed, or a signed `ADJUSTMENT`; a reason is required. |
+  | `POST /:id/ledger/:entryId/reverse` | `customers.credit` | Exactly the opposite of one opening, adjustment or payment, done once. A reversed payment's invoices are due again. |
+  | `GET /:id/ledger` | `customers.view` | The statement: IST `from`/`to`, an opening balance before `from`, running balances, paging. |
+  | `GET /:id/invoices` | `customers.view` | Credit invoices with `due` = credit part − credit-refund returns − allocations of unreversed payments. |
+  | `POST /:id/payments` | `customers.collect` | A collection: the method is never CREDIT, `receivedOn` is never in the future, and allocations stop at each invoice's due. The rest stays on account and the balance may go negative. Idempotent. |
+  | `GET /:id/payments/:paymentId` | `customers.view` | The receipt, with its reversal if any. |
+
+  - **Credit limit:** checked at `POST /pos/sales` under the customer balance lock. Going over gives a 409
+    whose `errors[0]` has `outstanding`, `creditLimit` and `available`. `overrideCreditLimit` with
+    `pos.credit.override` (owner and manager) lets the sale through and writes the reason on the
+    CREDIT_SALE entry.
+  - **Archived customers:** they take no new bill (409).
+  - **Checkout:** the preview now returns `customer` with outstanding, limit and available.
+- **Code:**
+  - `customer.service.ts`, `customerLedger.service.ts`, `customerLedger.ts` (shared IST and serialising
+    helpers) and `customer.validation.ts`.
+  - `billing.ts` gains `lockCustomerBalance`, and `applyCustomerEntry` takes payment, reversal, reason and
+    key.
+  - `sale.service.ts` adds `checkCreditLimit`.
+  - New permissions `customers.collect`, `customers.credit` and `pos.credit.override`.
+- **Integrity:**
+  - **Lock order:** every flow takes the same one total order, INV/RCPT series → sale rows by id → CN series
+    → stock rows → customer balance.
+  - **Credit sales:** two racing credit sales can't both take the last of a limit (tested).
+  - **The ledger:** append-only and signed. `balanceAfter` is the running balance, and
+    `CustomerBalance` is a cache moved only by `applyCustomerEntry`.
+- **Retired** (P-011): the old order service and validation, and the client service, validation and empty
+  controllers. Their tables stay, unrouted.
+
+**kirana-F `phase5/web`** (kirana-44, `81f6466`):
+- **Customers:** `/customers` has a list with search, tag, due-only and sort filters, and a form to add or edit
+  a customer that asks before sharing a phone. The profile shows outstanding, limit, available, the
+  credit invoices due, and adjustments.
+- **Statement:** date range, opening balance, running balances and reversals. It prints as a named A4 page
+  and can be shared.
+- **Collect payment:** allocates oldest-first by default and can be edited per invoice. It ends on a payment
+  receipt.
+- **POS:**
+  - A customer picker shows outstanding and available.
+  - Over the limit, checkout shows the 409 with outstanding, limit and available, and offers an override.
+    The retry sends the same body and key. The server writes "Over the credit limit of X by Y" on the
+    ledger entry. Credit stays owner/manager only (`pos.credit`).
+  - The static UPI QR (`qrcode-generator` 1.4.4, an SVG made in the browser) appears when the shop has a
+    UPI ID. It is labelled as not bank-confirmed.
+- **Business settings:** UPI ID.
+
+**Checks** (2026-11-18/19):
+
+| Repo     | Command                                                  | Result                         |
+| -------- | -------------------------------------------------------- | ------------------------------ |
+| Kirana-B | `npm test` on `c93f630`                                  | ❌ 169/170: `auth.test` login gave a one-off 500 "Database error" while several sessions loaded Postgres; it passed on re-run |
+| Kirana-B | review fixes (kirana-ca), targeted files                 | ✅ 32/32 (`318b90b`) |
+| Kirana-B | `npm test` (`kirana_test`) on `318b90b`                  | ✅ 18 files, 170 passed |
+| Live     | API pass on `kirana_p5c_test` / `kirana_p5l_test` (kirana-ca, kirana-44) | ✅ customers and limits slice 57/57; ledger and collections slice 38/38 |
+| kirana-F | prettier, `vitest run`, build on `cab2dce`               | ✅ 253 passed, build OK |
+| Live     | Browser + API pass on `kirana_p5full_test` (kirana-44), Kirana-B `318b90b` + kirana-F `cab2dce` | ✅ C1–C9: list filters, shared phone add/rename, profile and collect with auto-allocation, statement reverse, adjustments, manager override at the POS end to end, cashier limits, UPI ID setting, 375 px. Statement 1 A4 page, receipts 1 page on 80 mm and A4, and the UPI QR decodes to the right `upi://pay` link. ❌ D1 (low): the QR sat 68 px below the checkout dialog's fold at 1280×800 → `scrollIntoView` once it appears (kirana-F `81f6466`), rechecked live |
+| kirana-F | tsc, prettier, `vitest run`, build on `81f6466` (kirana-44) | ✅ 36 files, 255 passed, build OK |
+<!-- P5-MERGED -->
 
 ## Phase 4: what was built (2026-11-18)
 
@@ -373,6 +457,12 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 
 ## Migrations
 
+- **Phase 5:** `prisma/migrations/20261118200000_phase5_customer_ledger/`, generated with `migrate diff`
+  and reviewed. It adds enum values, columns (`client.creditLimit`/`isActive`/`notes`/`tags`,
+  `kirana.upiId` and four `CustomerLedgerEntry` columns) and the two payment tables. It drops one index,
+  the unique `(kiranaId, phoneNumber)`, which the owner approved, and replaces it with a plain index. Then
+  it backfills a 0 `CustomerBalance` row for each customer without one. Applied to the dev DB `kirana` on
+  2026-11-18, with no drift (13 migrations).
 - **Phase 4:** `prisma/migrations/20261118160000_phase4_sales/`, generated with `migrate diff` and
   reviewed: additive only (new enums and tables; three `kirana` columns with defaults UNREGISTERED,
   NEAREST_1, `INV`; no DROP, no SET NULL). Applied to the dev DB `kirana` on 2026-11-18, no drift.
@@ -420,14 +510,15 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Business + store setup     | ✅     | Self-signup and admin onboarding; single default store; no multi-store workflows (A-002)    |
 | Authentication / sessions  | ✅     | See above. Deferred: cashier PIN, per-account lockout                                        |
 | Roles / permissions        | ✅     | Server-enforced and tested; the UI only hides                                                |
-| Tenant isolation           | ✅     | Catalogue, business and members are tested cross-tenant; order/client services scoped, unrouted |
+| Tenant isolation           | ✅     | Catalogue, business, members, sales and customers are tested cross-tenant |
 | Web admin shell            | ✅     | A-022 look, i18n en/hi/mr, generated API types                                               |
 | Desktop POS shell          | 🟡     | Tauri shell wraps kirana-F (A-029); Rust never compiled (no toolchain); hardware is O-4       |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | POS (web): cart, scan, held bills | ✅ | Phase 3 merged locally and live-passed; push pending                               |
 | Checkout, invoices, returns | ✅    | Phase 4 (A-030), live pass green after D1–D6; defaults await the owner (O-8, O-10, O-11)     |
-| Udhaar, purchasing         | ⚠️/❌  | Credit sales post a customer ledger (Phase 4); statements, collections, purchasing → Phases 5–6. Old order/wallet tables stay unrouted (P-011) |
+| Customers, udhaar          | ✅     | Phase 5 (A-031): ledger, statements, credit limits, collections, reversals |
+| Purchasing, suppliers      | ❌     | Phase 6 (next). Old `purchaseOrder` and order/wallet tables stay unrouted (P-011) |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
 ## Known gaps and risks
@@ -508,6 +599,21 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
       unit picker (existing Phase 3 behaviour).
     - **Old tables:** `order`, `orderItem`, `clientWallet*` are untouched and unrouted (P-011).
     - **hi/mr** strings for checkout and sales are machine-drafted.
+13. **Phase 5 gaps:**
+    - **On-account money:** a collection's unallocated rest stays on account. There is no screen to set it
+      against an invoice later. Dues use only allocations, so such an invoice still shows as due while
+      the balance is right.
+    - **"recent" sort:** orders by the balance row's `updatedAt`, so it means recently added or recently
+      active (a new customer with no entries sorts as recent).
+    - **Override 403:** every role that may sell on credit (`pos.credit`: owner, manager) also holds
+      `pos.credit.override`, so the 403 for a missing override can't be reached today. It guards a future
+      role split and is untested for that reason.
+    - **UPI:** a static QR only; payments stay RECORDED (O-10). No gateway or reconciliation.
+    - **hi/mr** strings for customers and collections are machine-drafted.
+    - **Not checked live:** dark mode, and the native `navigator.share` sheet (only the clipboard
+      fallback and the `wa.me` link were checked).
+    - **Throwaway test DBs** for the owner to drop or keep: `kirana_p5l_test`, `kirana_p5c_test`,
+      `kirana_p5live_test`, `kirana_p5full_test`, `kirana_live_test`, `kirana_p4live_test`.
 
 ## Manual verification
 
@@ -553,13 +659,14 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 1. **Owner:**
    - Make Kirana-B private, if that's still the plan; it was public at the last check.
    - Archive or delete `kirana-backend`.
-   - Back up `prisma/migrations/`, which now has 12 migrations (incl. `20261118160000_phase4_sales`).
-   - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
-     movement; method decided in Phase 7, recommended: moving weighted average).
+   - Back up `prisma/migrations/`, which now has 13 migrations (incl.
+     `20261118200000_phase5_customer_ledger`).
+   - Confirm the default taken for O-6 (global catalogue left unused).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-   - Confirm the Phase 4 defaults (A-030) and settle O-8 (GST, with a CA), O-10 (UPI gateway) and O-11.
-2. **Phase 4 is done** (2026-11-18): merged and pushed. The desktop app has never compiled: installing
-   Rust + MSVC is the owner's decision. The throwaway DBs `kirana_live_test` and `kirana_p4live_test` are
-   the owner's to drop or keep.
-3. **Then, in a fresh chat:** Phase 5 (customers, udhaar and the customer ledger), building on
-   `CustomerLedgerEntry`/`CustomerBalance` and `applyCustomerEntry` from Phase 4.
+   - Settle O-8 (GST, with a CA), including how GST enters a FIFO lot's cost (A-032).
+   - Drop or keep the throwaway test DBs listed under the Phase 5 gaps.
+2. **Phases 4 and 5 are done**, merged and pushed. The desktop app has never compiled: installing
+   Rust + MSVC is the owner's decision.
+3. **Phase 6** (suppliers, purchasing, goods receiving, stock operations) has started at the owner's
+   request in the same chat. FIFO costing, the receipt cost update and owner/manager count approval are
+   decided (O-15), and the contract is A-032.
