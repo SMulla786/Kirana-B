@@ -242,6 +242,9 @@ const Movement = z
     })
     .openapi('StockMovement');
 const Customer = z.object({id, name: z.string(), phoneNumber: z.string()}).openapi('Customer');
+// Registered up front: its only use is HeldBill's nullable customer, which would otherwise make the
+// component itself nullable.
+registry.register('Customer', Customer);
 const personRef = z.object({id, fullname: z.string()});
 const HeldBill = z
     .object({

@@ -23,6 +23,26 @@
       }
     },
     "schemas": {
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "phoneNumber"
+        ]
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
@@ -1694,27 +1714,6 @@
           "createdAt"
         ]
       },
-      "Customer": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "phoneNumber": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "phoneNumber"
-        ]
-      },
       "HeldBill": {
         "type": "object",
         "properties": {
@@ -1727,7 +1726,14 @@
             "nullable": true
           },
           "customer": {
-            "$ref": "#/components/schemas/Customer"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Customer"
+              },
+              {
+                "nullable": true
+              }
+            ]
           },
           "lines": {
             "type": "array",
