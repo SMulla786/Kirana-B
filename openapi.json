@@ -6406,7 +6406,7 @@
         "tags": [
           "POS"
         ],
-        "summary": "Confirm a recall: delete the draft claimed with claimKey",
+        "summary": "Confirm a recall: take the draft claimed with claimKey off the list for good",
         "description": "Requires permission `pos.use`.",
         "security": [
           {

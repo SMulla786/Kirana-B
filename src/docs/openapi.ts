@@ -565,12 +565,17 @@ pos(
     'Claim a held bill for this till (2 min). Repeat with the same claimKey to retry; another key gets 404 while the claim is live',
     {params: idParams, body: posValidation.claimSchema, data: HeldBill, extraResponses: notFound},
 );
-pos('delete', '/pos/held/{id}', 'Confirm a recall: delete the draft claimed with claimKey', {
-    params: idParams,
-    query: posValidation.claimSchema,
-    status: 204,
-    extraResponses: {409: {description: 'Another till holds the claim', schema: ErrorResponse}},
-});
+pos(
+    'delete',
+    '/pos/held/{id}',
+    'Confirm a recall: take the draft claimed with claimKey off the list for good',
+    {
+        params: idParams,
+        query: posValidation.claimSchema,
+        status: 204,
+        extraResponses: {409: {description: 'Another till holds the claim', schema: ErrorResponse}},
+    },
+);
 
 // Platform admin (role ADMIN, no tenant permission)
 const adm = (m: Method, path: string, summary: string, rest: Partial<Op>) =>

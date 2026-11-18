@@ -140,7 +140,8 @@ export const applyMovement = async (
 class StockService {
     /** Records one movement. A repeated idempotencyKey returns the first result instead of a duplicate. */
     async recordMovement(ctx: StockContext, input: MovementInput) {
-        if (input.idempotencyKey) {
+        const replay = async () => {
+            if (!input.idempotencyKey) return null;
             const existing = await prisma.stockMovement.findUnique({
                 where: {
                     kiranaId_idempotencyKey: {
@@ -150,18 +151,27 @@ class StockService {
                 },
                 include: movementInclude,
             });
-            if (existing) {
-                if (existing.productId !== input.productId || existing.type !== input.type) {
-                    throw new ApiError(
-                        409,
-                        'This idempotency key was already used for another movement',
-                    );
-                }
-                return {movement: serializeMovement(existing, ctx.canSeeCost), replayed: true};
+            if (!existing) return null;
+            if (existing.productId !== input.productId || existing.type !== input.type) {
+                throw new ApiError(
+                    409,
+                    'This idempotency key was already used for another movement',
+                );
             }
+            return {movement: serializeMovement(existing, ctx.canSeeCost), replayed: true};
+        };
+        const earlier = await replay();
+        if (earlier) return earlier;
+        try {
+            const movement = await prisma.$transaction((tx) => applyMovement(tx, ctx, input));
+            return {movement: serializeMovement(movement, ctx.canSeeCost), replayed: false};
+        } catch (e) {
+            // Two in-flight retries with one key: the loser rolled back (unique index, or the OPENING
+            // check after the balance lock); once the winner's movement exists, replay it.
+            const winner = await replay();
+            if (winner) return winner;
+            throw e;
         }
-        const movement = await prisma.$transaction((tx) => applyMovement(tx, ctx, input));
-        return {movement: serializeMovement(movement, ctx.canSeeCost), replayed: false};
     }
 
     async listMovements(ctx: StockContext, query: MovementQuery) {

@@ -202,7 +202,12 @@ class HeldBillService {
     /** Bills another till is loading right now (a live claim) are hidden. */
     async list(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>) {
         const rows = await prisma.heldBill.findMany({
-            where: {kiranaId: ctx.kiranaId, storeId: ctx.storeId, OR: unclaimed()},
+            where: {
+                kiranaId: ctx.kiranaId,
+                storeId: ctx.storeId,
+                recalledAt: null,
+                OR: unclaimed(),
+            },
             include,
             orderBy: {createdAt: 'desc'},
             take: 200,
@@ -232,18 +237,27 @@ class HeldBillService {
     ) {
         const where = {id, kiranaId: ctx.kiranaId, storeId: ctx.storeId};
         const {count} = await prisma.heldBill.updateMany({
-            where: {...where, OR: [...unclaimed(), {claimKey}]},
+            where: {...where, recalledAt: null, OR: [...unclaimed(), {claimKey}]},
             data: {claimKey, claimedAt: new Date()},
         });
         if (count === 0) throw new ApiError(404, 'Held bill not found');
         return serialize(await prisma.heldBill.findFirstOrThrow({where, include}), ctx);
     }
 
-    /** The till has the bill in its cart: drop the draft. 409 if another till holds the claim now. */
+    /**
+     * The till has the bill in its cart: take the draft off the list for good. It is marked, not
+     * deleted, so a late confirm from a till whose claim lapsed still gets 409 after another till
+     * has claimed and confirmed it. Repeating a confirm with the same claimKey is a no-op (204).
+     */
+    // shortcut: recalled drafts are kept forever (small rows); purge old ones if the table grows.
     async confirm(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>, id: string, claimKey: string) {
         const where = {id, kiranaId: ctx.kiranaId, storeId: ctx.storeId};
-        const {count} = await prisma.heldBill.deleteMany({where: {...where, claimKey}});
-        if (count === 0 && (await prisma.heldBill.count({where}))) {
+        await prisma.heldBill.updateMany({
+            where: {...where, claimKey, recalledAt: null},
+            data: {recalledAt: new Date()},
+        });
+        const row = await prisma.heldBill.findFirst({where, select: {claimKey: true}});
+        if (row && row.claimKey !== claimKey) {
             throw new ApiError(409, 'Another till has recalled this bill');
         }
     }

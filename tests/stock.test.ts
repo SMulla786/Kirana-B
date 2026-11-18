@@ -142,6 +142,27 @@ describe('stock ledger', () => {
         expect(await dbTotal(p.id)).toBe(4);
     });
 
+    it('replays, never duplicates, when two requests with one key arrive together', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token);
+        for (const body of [
+            {productId: p.id, type: 'OPENING', quantity: 4, idempotencyKey: randomUUID()},
+            {
+                productId: p.id,
+                type: 'ADJUSTMENT',
+                quantity: 2,
+                reason: 'count',
+                idempotencyKey: randomUUID(),
+            },
+        ]) {
+            const [a, b] = await Promise.all([move(token, body), move(token, body)]);
+            expect([a.status, b.status].sort()).toEqual([200, 201]);
+            expect(a.body.data.id).toBe(b.body.data.id);
+        }
+        expect((await list(token, p.id)).total).toBe(2);
+        expect(await dbTotal(p.id)).toBe(6);
+    });
+
     it('records actor, type, reason, reference and createdAt', async () => {
         const owner = await createOwner();
         const p = await createProduct(owner.token);

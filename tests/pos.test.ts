@@ -98,6 +98,11 @@ describe('held bills', () => {
         await recall(token, id, 'till-B-key').expect(200);
         await confirm(token, id).expect(409);
         await confirm(token, id, 'till-B-key').expect(204);
+        // Till A's DELETE arrives late, after B confirmed: still 409, never a silent 204.
+        await confirm(token, id).expect(409);
+        await confirm(token, id, 'till-B-key').expect(204);
+        await recall(token, id).expect(404);
+        expect((await api.get(HELD).set(bearer(token))).body.data).toEqual([]);
     });
 
     it('returns the first bill when a hold is retried with the same idempotencyKey', async () => {
