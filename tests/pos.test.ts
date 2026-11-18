@@ -108,6 +108,12 @@ describe('held bills', () => {
         const again = await hold(token, body).expect(200);
         expect(again.body.data.id).toBe(first.body.data.id);
         expect((await api.get(HELD).set(bearer(token))).body.data).toHaveLength(1);
+
+        // Two in-flight retries with one key: one creates, the other replays it.
+        const race = {idempotencyKey: uniqueName('race'), lines: [line(p.id)]};
+        const both = await Promise.all([hold(token, race), hold(token, race)]);
+        expect(both.map((r) => r.status).sort()).toEqual([200, 201]);
+        expect(both[0].body.data.id).toBe(both[1].body.data.id);
     });
 
     it('never builds the gross from a rounded unit price', async () => {

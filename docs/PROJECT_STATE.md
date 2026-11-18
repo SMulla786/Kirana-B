@@ -397,6 +397,9 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
     - **Shortcut:** `src/docs/openapi.ts` emits nullable registered refs as `allOf + nullable`, and
       openapi-typescript drops the null. kirana-F restores it in `src/pages/pos/types.ts` (marked
       `shortcut:`).
+    - **Stock idempotency race (Phase 2 code):** `stockService.recordMovement` checks the
+      idempotencyKey, then creates. Two in-flight retries with one key give the second a P2002 → 409
+      instead of a replay. Held bills catch P2002 and replay; copy that pattern there.
     - **Catalogue validation:** it is stricter than the ledger. A product with `salesUnit: KILOGRAM` on a
       GRAM base needs a stored KILOGRAM unit row (reported to the Phase 2 owner).
 

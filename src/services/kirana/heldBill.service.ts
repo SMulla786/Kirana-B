@@ -98,16 +98,21 @@ const serialize = async (
 };
 
 class HeldBillService {
-    /** A draft only: it never touches stock, orders, wallets or revenue. */
-    /** Returns `created: false` when the idempotencyKey was already used: a retry, not a new bill. */
+    /**
+     * A draft only: it never touches stock, orders, wallets or revenue. Returns `created: false` when the
+     * idempotencyKey was already used: a retry, not a new bill.
+     */
     async hold(ctx: PosContext, input: HoldInput) {
-        if (input.idempotencyKey) {
+        const replay = async () => {
+            if (!input.idempotencyKey) return null;
             const prior = await prisma.heldBill.findFirst({
                 where: {kiranaId: ctx.kiranaId, idempotencyKey: input.idempotencyKey},
                 include,
             });
-            if (prior) return {bill: await serialize(prior, ctx), created: false};
-        }
+            return prior && {bill: await serialize(prior, ctx), created: false};
+        };
+        const earlier = await replay();
+        if (earlier) return earlier;
         const ids = [...new Set(input.lines.map((l) => l.productId))];
         const products = await prisma.kiranaMaterial.findMany({
             where: {id: {in: ids}, kiranaId: ctx.kiranaId, status: 'ACTIVE'},
@@ -170,19 +175,28 @@ class HeldBillService {
             };
         });
 
-        const row = await prisma.heldBill.create({
-            data: {
-                kiranaId: ctx.kiranaId,
-                storeId: ctx.storeId,
-                createdById: ctx.userId,
-                customerId: input.customerId ?? null,
-                note: input.note || null,
-                lines,
-                idempotencyKey: input.idempotencyKey ?? null,
-            },
-            include,
-        });
-        return {bill: await serialize(row, ctx), created: true};
+        const row = await prisma.heldBill
+            .create({
+                data: {
+                    kiranaId: ctx.kiranaId,
+                    storeId: ctx.storeId,
+                    createdById: ctx.userId,
+                    customerId: input.customerId ?? null,
+                    note: input.note || null,
+                    lines,
+                    idempotencyKey: input.idempotencyKey ?? null,
+                },
+                include,
+            })
+            .catch(async (e) => {
+                // Two in-flight retries with one key: the loser replays the winner's bill.
+                const isDup =
+                    e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+                const winner = isDup && (await replay());
+                if (winner) return winner;
+                throw e;
+            });
+        return 'created' in row ? row : {bill: await serialize(row, ctx), created: true};
     }
 
     /** Bills another till is loading right now (a live claim) are hidden. */
