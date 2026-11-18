@@ -1,8 +1,8 @@
 import {Request} from 'express';
 import httpStatus from 'http-status';
-import {heldBillService} from '@services/kirana';
+import {heldBillService, saleService} from '@services/kirana';
 import {catchAsync, ApiResponse} from '@utils/index';
-import {commonValidation, posValidation} from '@validations/index';
+import {commonValidation, posValidation, saleValidation} from '@validations/index';
 import {tenantOf} from '@middlewares/auth.middleware';
 import {hasPermission} from '@config/permissions';
 import {catalogContext} from './catalog.controller';
@@ -17,6 +17,7 @@ const posContext = (req: Request) => {
         canSeeCost,
         canDiscount: hasPermission(role, 'pos.discount'),
         canOverridePrice: hasPermission(role, 'pos.price.override'),
+        canCredit: hasPermission(role, 'pos.credit'),
     };
 };
 
@@ -42,5 +43,16 @@ export default {
         const {claimKey} = posValidation.claimSchema.parse(req.query);
         await heldBillService.confirm(catalogContext(req), id, claimKey);
         res.status(httpStatus.NO_CONTENT).end();
+    }),
+    checkout: catchAsync(async (req, res) => {
+        const input = saleValidation.checkoutSchema.parse(req.body);
+        const preview = await saleService.preview(posContext(req), input);
+        res.json(new ApiResponse(httpStatus.OK, preview, 'Checkout'));
+    }),
+    completeSale: catchAsync(async (req, res) => {
+        const input = saleValidation.completeSaleSchema.parse(req.body);
+        const {sale, created} = await saleService.complete(posContext(req), input);
+        const status = created ? httpStatus.CREATED : httpStatus.OK;
+        res.status(status).json(new ApiResponse(status, sale, 'Sale completed'));
     }),
 };

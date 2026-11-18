@@ -10,5 +10,7 @@ router.get('/held', c.list);
 router.post('/held', c.hold);
 router.post('/held/:id/recall', c.recall);
 router.delete('/held/:id', c.confirm);
+router.post('/checkout', c.checkout);
+router.post('/sales', c.completeSale);
 
 export default router;

@@ -1,15 +1,14 @@
 import {z} from 'zod';
-import {Prisma, UnitCode} from '@prisma/client';
+import {Prisma} from '@prisma/client';
 import prisma from 'client';
 import ApiError from '@utils/ApiError';
-import {resolveFactor, toBaseQuantity} from '@utils/units';
 import {posValidation} from '@validations/index';
 import {productInclude, serializeProduct} from './catalog.service';
+import {round2} from './billing';
+import {priceLines} from './pricing';
 
-type Decimal = Prisma.Decimal;
 type HoldInput = z.infer<typeof posValidation.holdBillSchema>;
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
-const round2 = (d: Decimal) => d.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 
 /** Who is holding: tenant and store from the session, plus what they may do. */
 export type PosContext = {
@@ -113,13 +112,7 @@ class HeldBillService {
         };
         const earlier = await replay();
         if (earlier) return earlier;
-        const ids = [...new Set(input.lines.map((l) => l.productId))];
-        const products = await prisma.kiranaMaterial.findMany({
-            where: {id: {in: ids}, kiranaId: ctx.kiranaId, status: 'ACTIVE'},
-            include: {units: {select: {unit: true, factor: true}}},
-        });
-        const byId = new Map(products.map((p) => [p.id, p]));
-        if (ids.some((id) => !byId.has(id))) throw new ApiError(404, 'Product not found');
+        const priced = await priceLines(ctx, input.lines);
         if (input.customerId) {
             const c = await prisma.client.findFirst({
                 where: {id: input.customerId, kiranaId: ctx.kiranaId},
@@ -127,53 +120,19 @@ class HeldBillService {
             });
             if (!c) throw new ApiError(404, 'Customer not found');
         }
-
-        const lines = input.lines.map((l, i): StoredLine => {
-            const fail = (status: number, message: string): never => {
-                throw new ApiError(status, message, [{field: `lines.${i}`, message}]);
-            };
-            const p = byId.get(l.productId)!;
-            // A stored pack size, else a fixed metric factor (kg on a gram base), as applyMovement does.
-            const factorOf = (unit: UnitCode) => {
-                const fixed = resolveFactor(p.baseUnit, unit);
-                const stored = p.units.find((u) => u.unit === unit)?.factor;
-                return stored ?? (typeof fixed === 'string' ? undefined : fixed);
-            };
-            const factor = factorOf(l.unit);
-            if (!factor) return fail(400, `${l.unit} is not one of this product's units`);
-            toBaseQuantity(l.quantity, factor, p.baseUnit); // throws 400 on bad precision/fraction
-
-            // sellingPrice is per sales unit. The gross is never built from a rounded unit price, or
-            // 750 g at ₹45/kg would bill ₹37.50 and picking a smaller unit would be a hidden discount.
-            const salesFactor = factorOf(p.salesUnit) ?? D(1);
-            const shown = p.sellingPrice && round2(p.sellingPrice.mul(factor).div(salesFactor)); // display only
-            const overridden = !!l.unitPrice && !(shown && l.unitPrice.equals(shown));
-            if (overridden) {
-                if (!ctx.canOverridePrice) return fail(403, 'You cannot change the price');
-            } else if (!shown) {
-                return fail(400, `"${p.name}" has no price; enter one`);
-            }
-            const unitPrice = overridden ? l.unitPrice! : shown!;
-            const gross = round2(
-                overridden
-                    ? l.quantity.mul(unitPrice)
-                    : l.quantity.mul(factor).mul(p.sellingPrice!).div(salesFactor),
-            );
-            const discount = l.discount ?? D(0);
-            if (discount.gt(0) && !ctx.canDiscount) return fail(403, 'You cannot give a discount');
-            if (discount.gt(gross)) return fail(400, 'Discount cannot exceed the line amount');
-            return {
-                productId: p.id,
-                productName: p.name,
+        const lines = priced.map(
+            (l): StoredLine => ({
+                productId: l.product.id,
+                productName: l.product.name,
                 unit: l.unit,
-                factor: factor.toString(),
+                factor: l.factor.toString(),
                 quantity: l.quantity.toFixed(3),
-                unitPrice: unitPrice.toFixed(2),
-                gross: gross.toFixed(2),
-                discount: discount.toFixed(2),
-                priceOverridden: overridden,
-            };
-        });
+                unitPrice: l.unitPrice.toFixed(2),
+                gross: l.gross.toFixed(2),
+                discount: l.discount.toFixed(2),
+                priceOverridden: l.priceOverridden,
+            }),
+        );
 
         const row = await prisma.heldBill
             .create({
