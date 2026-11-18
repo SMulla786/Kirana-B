@@ -303,6 +303,21 @@
           "current"
         ]
       },
+      "GstScheme": {
+        "type": "string",
+        "enum": [
+          "UNREGISTERED",
+          "REGULAR",
+          "COMPOSITION"
+        ]
+      },
+      "RoundOffRule": {
+        "type": "string",
+        "enum": [
+          "NONE",
+          "NEAREST_1"
+        ]
+      },
       "Business": {
         "type": "object",
         "properties": {
@@ -322,6 +337,15 @@
           "gstin": {
             "type": "string",
             "nullable": true
+          },
+          "gstScheme": {
+            "$ref": "#/components/schemas/GstScheme"
+          },
+          "roundOff": {
+            "$ref": "#/components/schemas/RoundOffRule"
+          },
+          "invoicePrefix": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -362,6 +386,9 @@
           "address",
           "City",
           "gstin",
+          "gstScheme",
+          "roundOff",
+          "invoicePrefix",
           "createdAt",
           "stores"
         ]
@@ -1229,6 +1256,661 @@
           "total",
           "createdBy",
           "createdAt"
+        ]
+      },
+      "CheckoutLine": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/UnitCode"
+          },
+          "factor": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "In the selected unit",
+            "example": "12.000"
+          },
+          "unitPrice": {
+            "type": "string",
+            "description": "Per selected unit, for display",
+            "example": "45.00"
+          },
+          "gross": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "discount": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "priceOverridden": {
+            "type": "boolean"
+          },
+          "gstRate": {
+            "type": "string",
+            "description": "0.00 unless the business is REGULAR",
+            "example": "5.00"
+          },
+          "taxableValue": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "cgst": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "sgst": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "total": {
+            "type": "string",
+            "description": "Payable for the line, tax included",
+            "example": "45.00"
+          }
+        },
+        "required": [
+          "productId",
+          "productName",
+          "unit",
+          "factor",
+          "quantity",
+          "unitPrice",
+          "gross",
+          "discount",
+          "priceOverridden",
+          "gstRate",
+          "taxableValue",
+          "cgst",
+          "sgst",
+          "total"
+        ]
+      },
+      "CheckoutPreview": {
+        "type": "object",
+        "properties": {
+          "gstScheme": {
+            "type": "string",
+            "enum": [
+              "UNREGISTERED",
+              "REGULAR",
+              "COMPOSITION"
+            ]
+          },
+          "roundOffRule": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "NEAREST_1"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckoutLine"
+            }
+          },
+          "subtotal": {
+            "type": "string",
+            "description": "Sum of line gross",
+            "example": "45.00"
+          },
+          "discountTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "taxableTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "cgstTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "sgstTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "roundOff": {
+            "type": "string",
+            "description": "Signed; payable minus the unrounded total",
+            "example": "45.00"
+          },
+          "total": {
+            "type": "string",
+            "description": "Payable",
+            "example": "45.00"
+          }
+        },
+        "required": [
+          "gstScheme",
+          "roundOffRule",
+          "lines",
+          "subtotal",
+          "discountTotal",
+          "taxableTotal",
+          "cgstTotal",
+          "sgstTotal",
+          "roundOff",
+          "total"
+        ]
+      },
+      "PaymentMethod": {
+        "type": "string",
+        "enum": [
+          "CASH",
+          "UPI",
+          "CARD",
+          "BANK_TRANSFER",
+          "CREDIT"
+        ]
+      },
+      "SalePayment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "tendered": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECORDED",
+              "CONFIRMED"
+            ],
+            "description": "RECORDED: entered by the cashier. CONFIRMED only from a trusted gateway (none yet), so UPI is never bank-confirmed"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "amount",
+          "tendered",
+          "reference",
+          "status"
+        ]
+      },
+      "ReturnDisposition": {
+        "type": "string",
+        "enum": [
+          "RESTOCK",
+          "DAMAGED"
+        ]
+      },
+      "SaleReturn": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "creditNoteNo": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "refundMethod": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "refundTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "roundOff": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "createdBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "saleLineId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "productName": {
+                  "type": "string"
+                },
+                "unit": {
+                  "$ref": "#/components/schemas/UnitCode"
+                },
+                "quantity": {
+                  "type": "string",
+                  "description": "In the sale line's unit",
+                  "example": "12.000"
+                },
+                "disposition": {
+                  "$ref": "#/components/schemas/ReturnDisposition"
+                },
+                "taxableValue": {
+                  "type": "string",
+                  "description": "Decimal, 2 places",
+                  "example": "45.00"
+                },
+                "cgst": {
+                  "type": "string",
+                  "description": "Decimal, 2 places",
+                  "example": "45.00"
+                },
+                "sgst": {
+                  "type": "string",
+                  "description": "Decimal, 2 places",
+                  "example": "45.00"
+                },
+                "amount": {
+                  "type": "string",
+                  "description": "Decimal, 2 places",
+                  "example": "45.00"
+                },
+                "restockMovementId": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uuid"
+                },
+                "damageMovementId": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "id",
+                "saleLineId",
+                "productName",
+                "unit",
+                "quantity",
+                "disposition",
+                "taxableValue",
+                "cgst",
+                "sgst",
+                "amount",
+                "restockMovementId",
+                "damageMovementId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "saleId",
+          "creditNoteNo",
+          "createdAt",
+          "reason",
+          "refundMethod",
+          "refundTotal",
+          "roundOff",
+          "createdBy",
+          "lines"
+        ]
+      },
+      "Sale": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNo": {
+            "type": "string",
+            "example": "INV/26-27/00001"
+          },
+          "financialYear": {
+            "type": "string",
+            "example": "2026-27"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gstScheme": {
+            "type": "string",
+            "enum": [
+              "UNREGISTERED",
+              "REGULAR",
+              "COMPOSITION"
+            ]
+          },
+          "seller": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string",
+                "nullable": true
+              },
+              "gstin": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "name",
+              "address",
+              "gstin"
+            ]
+          },
+          "customer": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phoneNumber": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "phoneNumber"
+            ]
+          },
+          "cashier": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/CheckoutLine"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "lineNo": {
+                      "type": "integer"
+                    },
+                    "sku": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hsnCode": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "priceIncludesTax": {
+                      "type": "boolean"
+                    },
+                    "stockMovementId": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "uuid"
+                    },
+                    "returnedQuantity": {
+                      "type": "string",
+                      "description": "Already returned, in the line unit",
+                      "example": "12.000"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "lineNo",
+                    "sku",
+                    "hsnCode",
+                    "priceIncludesTax",
+                    "stockMovementId",
+                    "returnedQuantity"
+                  ]
+                }
+              ]
+            }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalePayment"
+            }
+          },
+          "subtotal": {
+            "type": "string",
+            "description": "Sum of line gross",
+            "example": "45.00"
+          },
+          "discountTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "taxableTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "cgstTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "sgstTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "roundOff": {
+            "type": "string",
+            "description": "Signed; payable minus the unrounded total",
+            "example": "45.00"
+          },
+          "total": {
+            "type": "string",
+            "description": "Payable",
+            "example": "45.00"
+          },
+          "changeDue": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "returnedTotal": {
+            "type": "string",
+            "description": "Sum of refundTotal over the returns",
+            "example": "45.00"
+          },
+          "returns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SaleReturn"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNo",
+          "financialYear",
+          "createdAt",
+          "gstScheme",
+          "seller",
+          "customer",
+          "cashier",
+          "note",
+          "lines",
+          "payments",
+          "subtotal",
+          "discountTotal",
+          "taxableTotal",
+          "cgstTotal",
+          "sgstTotal",
+          "roundOff",
+          "total",
+          "changeDue",
+          "returnedTotal",
+          "returns"
+        ]
+      },
+      "SaleSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNo": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "customer": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "cashier": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "lineCount": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "returnedTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentMethod"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNo",
+          "createdAt",
+          "customer",
+          "cashier",
+          "lineCount",
+          "total",
+          "returnedTotal",
+          "methods"
         ]
       }
     },
@@ -2663,6 +3345,25 @@
                     "type": "string",
                     "nullable": true,
                     "pattern": "^\\d{2}[A-Z]{5}\\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$"
+                  },
+                  "gstScheme": {
+                    "type": "string",
+                    "enum": [
+                      "UNREGISTERED",
+                      "REGULAR",
+                      "COMPOSITION"
+                    ]
+                  },
+                  "roundOff": {
+                    "type": "string",
+                    "enum": [
+                      "NONE",
+                      "NEAREST_1"
+                    ]
+                  },
+                  "invoicePrefix": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9-]{1,8}$"
                   }
                 },
                 "additionalProperties": false
@@ -6505,6 +7206,961 @@
           },
           "409": {
             "description": "Another till holds the claim",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pos/checkout": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Price the cart for checkout: tax, round-off and payable (no writes)",
+        "description": "Requires permission `pos.use`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        },
+                        "quantity": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "unitPrice": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "discount": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "unit",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CheckoutPreview"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pos/sales": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs a customer and pos.credit",
+        "description": "Requires permission `pos.use`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "PIECE",
+                            "PACKET",
+                            "BOX",
+                            "CARTON",
+                            "GRAM",
+                            "KILOGRAM",
+                            "MILLILITRE",
+                            "LITRE"
+                          ]
+                        },
+                        "quantity": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "unitPrice": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "discount": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "unit",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  },
+                  "payments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": [
+                            "CASH",
+                            "UPI",
+                            "CARD",
+                            "BANK_TRANSFER",
+                            "CREDIT"
+                          ]
+                        },
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "tendered": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "reference": {
+                          "type": "string",
+                          "maxLength": 64
+                        }
+                      },
+                      "required": [
+                        "method",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "lines",
+                  "payments",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed: the same sale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Sale"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Sale"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sales": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Sales for the session store, newest first",
+        "description": "Requires permission `sales.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SaleSummary"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "pageSize"
+                      ]
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sales/{id}": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Invoice detail with payments, returns and stock references",
+        "description": "Requires permission `sales.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Sale"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sales/{id}/returns": {
+      "post": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Return part or all of a sale: a credit note, refund, stock back in (or written off) and any account credit. The sale itself never changes",
+        "description": "Requires permission `sales.return`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "saleLineId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "quantity": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        },
+                        "disposition": {
+                          "type": "string",
+                          "enum": [
+                            "RESTOCK",
+                            "DAMAGED"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "saleLineId",
+                        "quantity",
+                        "disposition"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "refundMethod": {
+                    "type": "string",
+                    "enum": [
+                      "CASH",
+                      "UPI",
+                      "CARD",
+                      "BANK_TRANSFER",
+                      "CREDIT"
+                    ]
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "lines",
+                  "reason",
+                  "refundMethod",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed: the same return",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SaleReturn"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SaleReturn"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "More than is left to return on a line",
             "content": {
               "application/json": {
                 "schema": {

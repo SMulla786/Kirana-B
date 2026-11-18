@@ -74,6 +74,9 @@ class BusinessService {
                 address: true,
                 City: true,
                 gstin: true,
+                gstScheme: true,
+                roundOff: true,
+                invoicePrefix: true,
                 createdAt: true,
                 stores: {
                     select: {id: true, name: true, address: true, isDefault: true},
@@ -86,6 +89,17 @@ class BusinessService {
     }
 
     public async updateBusiness(kiranaId: string, data: UpdateBusiness) {
+        // A tax or composition bill must carry the seller's GSTIN (A-030).
+        if (data.gstScheme && data.gstScheme !== 'UNREGISTERED' && data.gstin === undefined) {
+            const {gstin} = await prisma.kirana.findUniqueOrThrow({
+                where: {id: kiranaId},
+                select: {gstin: true},
+            });
+            if (!gstin)
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Set the GSTIN for this GST scheme');
+        } else if (data.gstScheme && data.gstScheme !== 'UNREGISTERED' && !data.gstin) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Set the GSTIN for this GST scheme');
+        }
         await prisma.kirana.update({where: {id: kiranaId}, data});
         return this.getBusiness(kiranaId);
     }

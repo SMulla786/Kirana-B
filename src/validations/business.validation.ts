@@ -1,10 +1,19 @@
 import {z} from 'zod';
-import {MembershipRole} from '@prisma/client';
+import {GstScheme, MembershipRole, RoundOffRule} from '@prisma/client';
 import userValidation from './user.validation';
 import {gstinSchema} from './custom.validation';
 
 const updateBusinessSchema = userValidation.businessSchema
-    .extend({gstin: gstinSchema.nullable()})
+    .extend({
+        gstin: gstinSchema.nullable(),
+        // GST is never assumed (A-030): REGULAR/COMPOSITION need a GSTIN, checked in the service.
+        gstScheme: z.nativeEnum(GstScheme),
+        roundOff: z.nativeEnum(RoundOffRule),
+        invoicePrefix: z
+            .string()
+            .trim()
+            .regex(/^[A-Z0-9-]{1,8}$/, 'Use 1-8 capital letters, digits or -'),
+    })
     .partial()
     .strict();
 

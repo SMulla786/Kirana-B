@@ -13,6 +13,9 @@ export const PERMISSIONS = [
     'pos.use',
     'pos.discount', // give a line discount
     'pos.price.override', // sell at a price other than the catalogue's
+    'pos.credit', // complete a sale (part) on customer credit (udhaar)
+    'sales.view', // sales history, invoice detail and reprint
+    'sales.return', // record a sales return and refund
     'customers.manage',
     'purchases.manage',
     'reports.view',
@@ -26,7 +29,7 @@ const ALL = [...PERMISSIONS];
 export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
     OWNER: ALL,
     MANAGER: ALL.filter((p) => p !== 'business.update'),
-    CASHIER: ['business.read', 'pos.use', 'catalog.read', 'customers.manage'],
+    CASHIER: ['business.read', 'pos.use', 'catalog.read', 'customers.manage', 'sales.view'],
     INVENTORY_MANAGER: [
         'business.read',
         'catalog.read',
@@ -42,6 +45,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
         'catalog.cost.view',
         'reports.view',
         'finance.view',
+        'sales.view',
     ],
     STAFF: ['business.read', 'catalog.read'],
 };

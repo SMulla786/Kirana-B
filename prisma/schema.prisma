@@ -67,24 +67,24 @@ enum StockMovementType {
 }
 
 model User {
-  id                     String               @id @default(uuid())
-  username               String               @unique
-  email                  String               @unique
+  id                     String                @id @default(uuid())
+  username               String                @unique
+  email                  String                @unique
   fullname               String
   password               String
   refreshToken           String?
   verifyCode             String?
   verifyCodeExpiry       DateTime?
-  isVerified             Boolean              @default(false)
-  isActive               Boolean              @default(true)
+  isVerified             Boolean               @default(false)
+  isActive               Boolean               @default(true)
   phoneNumber            String
   secondaryPhoneNumber   String?
-  role                   Role                 @default(KIRANA)
+  role                   Role                  @default(KIRANA)
   // single-use password reset: only a SHA-256 hash is stored
-  passwordResetTokenHash String?              @unique
+  passwordResetTokenHash String?               @unique
   passwordResetExpiry    DateTime?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
   kirana                 kirana?
   employee               employee?
   memberships            Membership[]
@@ -92,6 +92,9 @@ model User {
   stockMovements         StockMovement[]
   priceChanges           ProductPriceChange[]
   heldBills              HeldBill[]
+  sales                  Sale[]
+  saleReturns            SaleReturn[]
+  customerEntries        CustomerLedgerEntry[]
 }
 
 /// One login session per device. The refresh token is opaque; only its SHA-256 hash is stored.
@@ -131,17 +134,20 @@ model Membership {
 
 /// A physical shop. MVP: exactly one default store per business, created with it.
 model Store {
-  id             String          @id @default(uuid())
+  id             String           @id @default(uuid())
   kiranaId       String
   name           String
   address        String?
-  isDefault      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  kirana         kirana          @relation(fields: [kiranaId], references: [id])
+  isDefault      Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  kirana         kirana           @relation(fields: [kiranaId], references: [id])
   stockMovements StockMovement[]
   stockBalances  StockBalance[]
   heldBills      HeldBill[]
+  sales          Sale[]
+  saleReturns    SaleReturn[]
+  series         DocumentSeries[]
 
   @@index([kiranaId])
 }
@@ -153,6 +159,9 @@ model kirana {
   address          String
   City             String
   gstin            String?
+  gstScheme        GstScheme                @default(UNREGISTERED)
+  roundOff         RoundOffRule             @default(NEAREST_1)
+  invoicePrefix    String                   @default("INV")
   amount           Decimal                  @default(0)
   renewalAmount    Decimal                  @default(0)
   // languageId       String
@@ -169,6 +178,10 @@ model kirana {
   memberships      Membership[]
   brands           Brand[]
   heldBills        HeldBill[]
+  sales            Sale[]
+  saleReturns      SaleReturn[]
+  customerEntries  CustomerLedgerEntry[]
+  customerBalances CustomerBalance[]
 }
 
 model employee {
@@ -252,6 +265,7 @@ model KiranaMaterial {
   priceChanges      ProductPriceChange[]
   stockMovements    StockMovement[]
   stockBalances     StockBalance[]
+  saleLines         SaleLine[]
   orderItem         orderItem[]
   purchaseOrderItem purchaseOrderItem[]
 
@@ -336,6 +350,9 @@ model StockMovement {
   product         KiranaMaterial    @relation(fields: [productId], references: [id])
   store           Store             @relation(fields: [storeId], references: [id])
   actor           User              @relation(fields: [actorId], references: [id])
+  saleLine        SaleLine?
+  returnRestock   SaleReturnLine?   @relation("ReturnRestock")
+  returnDamage    SaleReturnLine?   @relation("ReturnDamage")
 
   @@unique([kiranaId, idempotencyKey])
   @@index([kiranaId, storeId, productId, createdAt])
@@ -369,6 +386,9 @@ model client {
   clientWallet        clientWallet?
   clientWalletHistory clientWalletHistory[]
   heldBills           HeldBill[]
+  sales               Sale[]
+  ledgerEntries       CustomerLedgerEntry[]
+  balance             CustomerBalance?
 
   @@unique([kiranaId, phoneNumber])
 }
@@ -477,4 +497,226 @@ model HeldBill {
 
   @@unique([kiranaId, idempotencyKey])
   @@index([kiranaId, storeId, createdAt])
+}
+
+// ---- Phase 4: sales, payments, invoices and returns (DECISIONS A-030) ----
+
+enum GstScheme {
+  UNREGISTERED // no tax on the bill
+  REGULAR // tax invoice: CGST + SGST from each product's gstRate (intra-state counter sale)
+  COMPOSITION // bill of supply: no tax charged on the bill
+}
+
+enum RoundOffRule {
+  NONE
+  NEAREST_1 // the payable total is rounded half up to the rupee; the difference is a round-off line
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  CREDIT // customer udhaar: posts a CustomerLedgerEntry
+}
+
+/// RECORDED: the cashier says it was paid. CONFIRMED is reserved for a trusted gateway or acquirer
+/// integration (O-10); nothing in the MVP sets it, so UPI is never shown as bank-confirmed.
+enum PaymentStatus {
+  RECORDED
+  CONFIRMED
+}
+
+enum DocumentKind {
+  INVOICE
+  CREDIT_NOTE
+}
+
+enum ReturnDisposition {
+  RESTOCK // back on the shelf: SALE_RETURN movement
+  DAMAGED // SALE_RETURN then DAMAGE, so the ledger shows both
+}
+
+enum CustomerEntryType {
+  CREDIT_SALE // + the customer owes more
+  RETURN_CREDIT // - a return refunded to the customer's account
+}
+
+/// Gapless numbers per store, document kind and financial year (April-March, IST). The counter row is
+/// incremented inside the sale transaction, so a rolled-back sale gives its number back.
+model DocumentSeries {
+  id            String       @id @default(uuid())
+  kiranaId      String
+  storeId       String
+  kind          DocumentKind
+  financialYear String // "2026-27"
+  next          Int          @default(1)
+  store         Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, kind, financialYear])
+}
+
+/// A completed sale (the invoice). Immutable: returns are separate records and never change it.
+model Sale {
+  id             String                @id @default(uuid())
+  kiranaId       String
+  storeId        String
+  invoiceNo      String
+  financialYear  String
+  sequence       Int
+  customerId     String?
+  cashierId      String
+  // Seller snapshot, so a reprint shows what the bill showed then.
+  gstScheme      GstScheme
+  sellerName     String
+  sellerAddress  String?
+  sellerGstin    String?
+  subtotal       Decimal               @db.Decimal(14, 2) // sum of line gross
+  discountTotal  Decimal               @db.Decimal(14, 2)
+  taxableTotal   Decimal               @db.Decimal(14, 2)
+  cgstTotal      Decimal               @db.Decimal(14, 2)
+  sgstTotal      Decimal               @db.Decimal(14, 2)
+  roundOff       Decimal               @db.Decimal(14, 2)
+  total          Decimal               @db.Decimal(14, 2) // payable
+  changeDue      Decimal               @db.Decimal(14, 2) // cash handed back
+  note           String?
+  idempotencyKey String
+  createdAt      DateTime              @default(now())
+  kirana         kirana                @relation(fields: [kiranaId], references: [id])
+  store          Store                 @relation(fields: [storeId], references: [id])
+  customer       client?               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  cashier        User                  @relation(fields: [cashierId], references: [id])
+  lines          SaleLine[]
+  payments       SalePayment[]
+  returns        SaleReturn[]
+  ledgerEntries  CustomerLedgerEntry[]
+
+  @@unique([kiranaId, idempotencyKey])
+  @@unique([storeId, invoiceNo])
+  @@index([kiranaId, storeId, createdAt])
+}
+
+/// A line as billed: price, discount and tax are snapshots and never recalculated.
+model SaleLine {
+  id               String           @id @default(uuid())
+  saleId           String
+  lineNo           Int
+  productId        String
+  productName      String
+  sku              String?
+  hsnCode          String?
+  unit             UnitCode
+  factor           Decimal          @db.Decimal(18, 6)
+  quantity         Decimal          @db.Decimal(14, 3) // in `unit`
+  unitPrice        Decimal          @db.Decimal(14, 2) // per `unit`, for display
+  gross            Decimal          @db.Decimal(14, 2)
+  discount         Decimal          @db.Decimal(14, 2)
+  priceOverridden  Boolean
+  priceIncludesTax Boolean
+  gstRate          Decimal          @db.Decimal(5, 2) // 0 unless the sale was REGULAR
+  taxableValue     Decimal          @db.Decimal(14, 2)
+  cgst             Decimal          @db.Decimal(14, 2)
+  sgst             Decimal          @db.Decimal(14, 2)
+  total            Decimal          @db.Decimal(14, 2) // payable for the line, tax included
+  stockMovementId  String?          @unique
+  sale             Sale             @relation(fields: [saleId], references: [id])
+  product          KiranaMaterial   @relation(fields: [productId], references: [id])
+  stockMovement    StockMovement?   @relation(fields: [stockMovementId], references: [id], onDelete: Restrict)
+  returnLines      SaleReturnLine[]
+
+  @@unique([saleId, lineNo])
+}
+
+model SalePayment {
+  id        String        @id @default(uuid())
+  saleId    String
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(14, 2) // allocated to the bill
+  tendered  Decimal?      @db.Decimal(14, 2) // CASH only: what the customer handed over
+  reference String? // UPI ref, card slip or bank reference, as typed
+  status    PaymentStatus @default(RECORDED)
+  createdAt DateTime      @default(now())
+  sale      Sale          @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+}
+
+/// A partial or full return against one sale, with its own credit-note number.
+model SaleReturn {
+  id             String                @id @default(uuid())
+  kiranaId       String
+  storeId        String
+  saleId         String
+  creditNoteNo   String
+  financialYear  String
+  sequence       Int
+  reason         String
+  refundMethod   PaymentMethod
+  refundTotal    Decimal               @db.Decimal(14, 2) // after round-off
+  roundOff       Decimal               @db.Decimal(14, 2)
+  createdById    String
+  idempotencyKey String
+  createdAt      DateTime              @default(now())
+  kirana         kirana                @relation(fields: [kiranaId], references: [id])
+  store          Store                 @relation(fields: [storeId], references: [id])
+  sale           Sale                  @relation(fields: [saleId], references: [id])
+  createdBy      User                  @relation(fields: [createdById], references: [id])
+  lines          SaleReturnLine[]
+  ledgerEntries  CustomerLedgerEntry[]
+
+  @@unique([kiranaId, idempotencyKey])
+  @@unique([storeId, creditNoteNo])
+  @@index([saleId])
+}
+
+model SaleReturnLine {
+  id                String            @id @default(uuid())
+  returnId          String
+  saleLineId        String
+  quantity          Decimal           @db.Decimal(14, 3) // in the sale line's unit
+  disposition       ReturnDisposition
+  taxableValue      Decimal           @db.Decimal(14, 2)
+  cgst              Decimal           @db.Decimal(14, 2)
+  sgst              Decimal           @db.Decimal(14, 2)
+  amount            Decimal           @db.Decimal(14, 2) // refund for the line, tax included
+  restockMovementId String?           @unique
+  damageMovementId  String?           @unique
+  saleReturn        SaleReturn        @relation(fields: [returnId], references: [id])
+  saleLine          SaleLine          @relation(fields: [saleLineId], references: [id])
+  restockMovement   StockMovement?    @relation("ReturnRestock", fields: [restockMovementId], references: [id], onDelete: Restrict)
+  damageMovement    StockMovement?    @relation("ReturnDamage", fields: [damageMovementId], references: [id], onDelete: Restrict)
+}
+
+/// Append-only customer account (udhaar). Phase 5 adds payments received, statements and limits.
+model CustomerLedgerEntry {
+  id           String            @id @default(uuid())
+  kiranaId     String
+  customerId   String
+  type         CustomerEntryType
+  amount       Decimal           @db.Decimal(14, 2) // signed: + the customer owes more
+  balanceAfter Decimal           @db.Decimal(14, 2)
+  saleId       String?
+  saleReturnId String?
+  actorId      String
+  createdAt    DateTime          @default(now())
+  kirana       kirana            @relation(fields: [kiranaId], references: [id])
+  customer     client            @relation(fields: [customerId], references: [id])
+  sale         Sale?             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  saleReturn   SaleReturn?       @relation(fields: [saleReturnId], references: [id], onDelete: Restrict)
+  actor        User              @relation(fields: [actorId], references: [id])
+
+  @@index([kiranaId, customerId, createdAt])
+}
+
+/// Running balance per customer, moved only together with a CustomerLedgerEntry (row-locked upsert).
+model CustomerBalance {
+  id         String   @id @default(uuid())
+  kiranaId   String
+  customerId String   @unique
+  balance    Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt  DateTime @updatedAt
+  kirana     kirana   @relation(fields: [kiranaId], references: [id])
+  customer   client   @relation(fields: [customerId], references: [id])
+
+  @@index([kiranaId])
 }

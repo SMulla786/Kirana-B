@@ -4,7 +4,19 @@ import {
     OpenAPIRegistry,
     OpenApiGeneratorV3,
 } from '@asteasolutions/zod-to-openapi';
-import {MembershipRole, ProductStatus, Role, StockMovementType, UnitCode} from '@prisma/client';
+import {
+    CustomerEntryType,
+    GstScheme,
+    MembershipRole,
+    PaymentMethod,
+    PaymentStatus,
+    ProductStatus,
+    ReturnDisposition,
+    Role,
+    RoundOffRule,
+    StockMovementType,
+    UnitCode,
+} from '@prisma/client';
 import {
     userValidation,
     businessValidation,
@@ -12,6 +24,7 @@ import {
     commonValidation,
     clientValidation,
     posValidation,
+    saleValidation,
 } from '@validations/index';
 
 extendZodWithOpenApi(z);
@@ -101,6 +114,9 @@ const Business = z
         address: z.string(),
         City: z.string(),
         gstin: z.string().nullable(),
+        gstScheme: z.nativeEnum(GstScheme).openapi('GstScheme'),
+        roundOff: z.nativeEnum(RoundOffRule).openapi('RoundOffRule'),
+        invoicePrefix: z.string(),
         createdAt: date,
         stores: z.array(Store),
     })
@@ -273,6 +289,137 @@ const HeldBillSummary = z
         createdAt: date,
     })
     .openapi('HeldBillSummary');
+// Phase 4: checkout, sales and returns (A-030). Nullable sub-objects stay inline (not registered refs),
+// so openapi-typescript keeps their null.
+const paymentMethod = z.nativeEnum(PaymentMethod).openapi('PaymentMethod');
+const pct = z.string().openapi({example: '5.00', description: 'GST rate, percent'});
+const customerRef = z.object({id, name: z.string(), phoneNumber: z.string()});
+const CheckoutLine = z
+    .object({
+        productId: id,
+        productName: z.string(),
+        unit: unitCode,
+        factor: z.string(),
+        quantity: qty.openapi({description: 'In the selected unit'}),
+        unitPrice: money.openapi({description: 'Per selected unit, for display'}),
+        gross: money,
+        discount: money,
+        priceOverridden: z.boolean(),
+        gstRate: pct.openapi({description: '0.00 unless the business is REGULAR'}),
+        taxableValue: money,
+        cgst: money,
+        sgst: money,
+        total: money.openapi({description: 'Payable for the line, tax included'}),
+    })
+    .openapi('CheckoutLine');
+const totalsShape = {
+    subtotal: money.openapi({description: 'Sum of line gross'}),
+    discountTotal: money,
+    taxableTotal: money,
+    cgstTotal: money,
+    sgstTotal: money,
+    roundOff: money.openapi({description: 'Signed; payable minus the unrounded total'}),
+    total: money.openapi({description: 'Payable'}),
+};
+const CheckoutPreview = z
+    .object({
+        gstScheme: z.nativeEnum(GstScheme),
+        roundOffRule: z.nativeEnum(RoundOffRule),
+        lines: z.array(CheckoutLine),
+        ...totalsShape,
+    })
+    .openapi('CheckoutPreview');
+const SalePaymentOut = z
+    .object({
+        id,
+        method: paymentMethod,
+        amount: money,
+        tendered: money.nullable(),
+        reference: z.string().nullable(),
+        status: z.nativeEnum(PaymentStatus).openapi({
+            description:
+                'RECORDED: entered by the cashier. CONFIRMED only from a trusted gateway (none yet), so UPI is never bank-confirmed',
+        }),
+    })
+    .openapi('SalePayment');
+const SaleReturnOut = z
+    .object({
+        id,
+        saleId: id,
+        creditNoteNo: z.string(),
+        createdAt: date,
+        reason: z.string(),
+        refundMethod: paymentMethod,
+        refundTotal: money,
+        roundOff: money,
+        createdBy: personRef,
+        lines: z.array(
+            z.object({
+                id,
+                saleLineId: id,
+                productName: z.string(),
+                unit: unitCode,
+                quantity: qty.openapi({description: "In the sale line's unit"}),
+                disposition: z.nativeEnum(ReturnDisposition).openapi('ReturnDisposition'),
+                taxableValue: money,
+                cgst: money,
+                sgst: money,
+                amount: money,
+                restockMovementId: id.nullable(),
+                damageMovementId: id.nullable(),
+            }),
+        ),
+    })
+    .openapi('SaleReturn');
+const Sale = z
+    .object({
+        id,
+        invoiceNo: z.string().openapi({example: 'INV/26-27/00001'}),
+        financialYear: z.string().openapi({example: '2026-27'}),
+        createdAt: date,
+        gstScheme: z.nativeEnum(GstScheme),
+        seller: z.object({
+            name: z.string(),
+            address: z.string().nullable(),
+            gstin: z.string().nullable(),
+        }),
+        customer: customerRef.nullable(),
+        cashier: personRef,
+        note: z.string().nullable(),
+        lines: z.array(
+            CheckoutLine.extend({
+                id,
+                lineNo: z.number().int(),
+                sku: z.string().nullable(),
+                hsnCode: z.string().nullable(),
+                priceIncludesTax: z.boolean(),
+                stockMovementId: id.nullable(),
+                returnedQuantity: qty.openapi({description: 'Already returned, in the line unit'}),
+            }),
+        ),
+        payments: z.array(SalePaymentOut),
+        ...totalsShape,
+        changeDue: money,
+        returnedTotal: money.openapi({description: 'Sum of refundTotal over the returns'}),
+        returns: z.array(SaleReturnOut),
+    })
+    .openapi('Sale');
+const SaleSummary = z
+    .object({
+        id,
+        invoiceNo: z.string(),
+        createdAt: date,
+        customer: idRef.nullable(),
+        cashier: personRef,
+        lineCount: z.number().int(),
+        total: money,
+        returnedTotal: money,
+        methods: z.array(paymentMethod),
+    })
+    .openapi('SaleSummary');
+// Registered so Phase 5 and the web can share the type; no route returns it yet.
+z.nativeEnum(CustomerEntryType).openapi('CustomerEntryType');
+
 const Health = z.object({status: z.string(), db: z.string()});
 const NewBusiness = z.object({
     business: idRef,
@@ -574,6 +721,70 @@ pos(
         query: posValidation.claimSchema,
         status: 204,
         extraResponses: {409: {description: 'Another till holds the claim', schema: ErrorResponse}},
+    },
+);
+
+pos(
+    'post',
+    '/pos/checkout',
+    'Price the cart for checkout: tax, round-off and payable (no writes)',
+    {
+        body: saleValidation.checkoutSchema,
+        data: CheckoutPreview,
+        extraResponses: notFound,
+    },
+);
+pos(
+    'post',
+    '/pos/sales',
+    'Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs a customer and pos.credit',
+    {
+        body: saleValidation.completeSaleSchema,
+        status: 201,
+        data: Sale,
+        extraResponses: {
+            ...notFound,
+            200: {description: 'Idempotency key replayed: the same sale', schema: envelope(Sale)},
+        },
+    },
+);
+
+// Sales history, invoices and returns
+const sales = (m: Method, path: string, summary: string, permission: string, rest: Partial<Op>) =>
+    route({method: m, path, tag: 'Sales', summary, permission, ...rest});
+sales('get', '/sales', 'Sales for the session store, newest first', 'sales.view', {
+    query: saleValidation.saleQuerySchema,
+    data: pageOf(SaleSummary),
+});
+sales(
+    'get',
+    '/sales/{id}',
+    'Invoice detail with payments, returns and stock references',
+    'sales.view',
+    {
+        params: idParams,
+        data: Sale,
+        extraResponses: notFound,
+    },
+);
+sales(
+    'post',
+    '/sales/{id}/returns',
+    'Return part or all of a sale: a credit note, refund, stock back in (or written off) and any account credit. The sale itself never changes',
+    'sales.return',
+    {
+        params: idParams,
+        body: saleValidation.createReturnSchema,
+        status: 201,
+        data: SaleReturnOut,
+        extraResponses: {
+            ...notFound,
+            200: {
+                description: 'Idempotency key replayed: the same return',
+                schema: envelope(SaleReturnOut),
+            },
+            409: {description: 'More than is left to return on a line', schema: ErrorResponse},
+        },
     },
 );
 
