@@ -57,7 +57,7 @@ and the web screens (kirana-44, `phase4/web`).
 | Kirana-B | `npx tsc --noEmit`, `-p tsconfig.test.json`, `npm run lint` | ✅ clean (`e29ba5f`)        |
 | Kirana-B | `npm test` (`kirana_test`)                               | ✅ 15 files, 154 passed (`e29ba5f`) |
 | kirana-F | tsc, prettier, `vitest run`, build (reported by kirana-44) | ✅ 29 files, 175 passed (`3878553`) |
-| Live     | Browser pass on `kirana_p4live_test` (kirana-44)         | ⏳ running                      |
+| Live     | Browser + API pass on `kirana_p4live_test` (kirana-44), Kirana-B `e29ba5f` + kirana-F `3878553` | ✅ backend: stock refs, one invoice per retry/double-click/concurrent post, gapless INV 1..17 and CN 1..5, cashier limits, all three GST schemes, returns incl. damaged on negative stock. ❌ web: D1 reprint prints 3 pages, D2 GSTIN can't be cleared; low D3–D6 → being fixed on `phase4/web` |
 
 ## Phase 3: what was built (2026-11-16)
 
@@ -498,6 +498,8 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
     - **Printing:** browser/webview print only; no ESC/POS driver, cash drawer or 58 mm default (O-4).
     - **Credit:** no credit limit, statements or collections yet (Phase 5).
     - **Zero-total sales** can't complete: every payment row must be above ₹0.
+    - **Search picks:** Enter on a typeahead result adds the product's sales unit; only tiles open the
+      unit picker (existing Phase 3 behaviour).
     - **Old tables:** `order`, `orderItem`, `clientWallet*` are untouched and unrouted (P-011).
     - **hi/mr** strings for checkout and sales are machine-drafted.
 
