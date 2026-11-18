@@ -16,6 +16,9 @@ const day = z
 const page = z.coerce.number().int().min(1).default(1);
 const reason = z.string().trim().min(1).max(200);
 
+// Zod still runs refinements after decimal() has rejected a value, so they check they got a Decimal.
+const isDecimal = (d: unknown): d is Prisma.Decimal => d instanceof Prisma.Decimal;
+
 const tags = z
     .array(z.string().trim().min(1).max(30))
     .max(10)
@@ -71,7 +74,7 @@ const updateCustomerSchema = z
 const adjustmentSchema = z
     .object({
         type: z.enum(['OPENING_BALANCE', 'ADJUSTMENT']),
-        amount: decimal({dp: 2}).refine((d) => !d.isZero(), 'Must not be 0'),
+        amount: decimal({dp: 2}).refine((d) => !isDecimal(d) || !d.isZero(), 'Must not be 0'),
         reason,
         idempotencyKey: key,
     })
@@ -99,6 +102,7 @@ const collectPaymentSchema = z
     })
     .strict()
     .superRefine((d, ctx) => {
+        if (!isDecimal(d.amount) || !d.allocations.every((a) => isDecimal(a.amount))) return;
         const seen = new Set<string>();
         d.allocations.forEach((a, i) => {
             if (seen.has(a.saleId)) {
