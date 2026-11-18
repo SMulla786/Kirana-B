@@ -120,5 +120,10 @@ defects and their fixes:
 
 Also in `5c9c869`: concurrent same-key stock movements (Phase 2 code) now replay instead of failing.
 
-**Re-pass on the mains:** the D1 two-till API check passes 12/12 on Kirana-B `5c9c869`. The browser re-pass
-of the D1 notice, D2, D3, D5, D6 and the regressions is running.
+**Re-pass on the mains** (Kirana-B `5c9c869`, kirana-F `96f1de9`):
+- **Pass:** D1 (API 12/12, plus the on-screen notice), D2, D3 (cart lines 68 → 196 px at 1024×600), D5 and
+  D6, plus 750 g = ₹33.75 and a hold retry giving one bill.
+- **Fail:** three fast scans added 2 (**D7**, a bug from before this review). When a lookup resolved, it
+  cleared the search box again, which wiped the next half-typed code. Fixed in kirana-F `5799510`: the box
+  is cleared only at Enter. A unit test reproduces the timing, fails before the fix and passes after; the
+  live recheck was requested.

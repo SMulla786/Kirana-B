@@ -1,7 +1,7 @@
 # Project state
 
 _Last updated 2026-11-18 · **Phase 3 (web POS) is merged locally on `main`** in Kirana-B (`5c9c869`) and
-kirana-F (`96f1de9`), with the review and live-pass fixes. **Not pushed.** The browser re-pass of the fixes
+kirana-F (`5799510`), with the review and live-pass fixes. **Not pushed.** The browser re-pass of the fixes
 is pending, then the owner's OK to push. Phase 2 is merged and pushed. The desktop shell (Tauri,
 A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
 
@@ -17,7 +17,7 @@ in the Tauri shell later. The model is in DECISIONS A-028.
   - `5c9c869`: live-pass D1 (a late confirm after another till took the bill gets 409; confirm marks
     `recalledAt` instead of deleting) and concurrent same-key stock movements replay instead of failing.
 - **kirana-F** `main`: fast-forward to `phase3/pos-web-fixes`, merge of `desktop/tauri-transport`
-  (`d308caf`), and types from Kirana-B main (`96f1de9`):
+  (`d308caf`), types from Kirana-B main (`96f1de9`), and `5799510` (live-pass D7):
   - `6797b03` (#2 tile/dialog prices), `1f9c2f4` (#1 scans, #3 exact line amounts, #4 scans during
     dialogs, #5 stable lines, #6 client), `f507ce6` (types), `d539a58` (live-pass D2, D3, D5, D6).
 
@@ -97,7 +97,8 @@ in the Tauri shell later. The model is in DECISIONS A-028.
 | kirana-F | `npm run build`                                          | ✅                              |
 | Live     | Browser pass (kirana-44) on kirana-F `f507ce6` + Kirana-B `4f2f974`, `kirana_live_test` | 10 pass, 1 partial, 2 fail → D1–D6, fixed on the mains |
 | Live     | D1 two-till API check on Kirana-B main `5c9c869`         | ✅ 12/12                        |
-| Live     | Browser re-pass of D1 notice, D2, D3, D5, D6 + regressions on kirana-F `96f1de9` | ⏳ running |
+| Live     | Browser re-pass on kirana-F `96f1de9` + Kirana-B `5c9c869` | ✅ D1 notice, D2, D3 (cart lines 68 → 196 px at 1024×600), D5, D6, 750 g = ₹33.75, hold retry → one bill. ❌ 3 fast scans added 2 (D7, older bug) → fixed in `5799510` with a test |
+| Live     | D7 recheck on kirana-F `5799510`                          | ⏳ requested                    |
 
 UI skills used: `frontend-design`, `emil-design-eng`, `apple-design` and `break-ui`. `pick-ui-library` and
 `prototype` aren't installed, and no UI dependency was added.
@@ -222,7 +223,7 @@ the first build.
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
 | `kirana/Kirana-B/`       | `main` `5c9c869` + docs, Phase 3 merged, **not pushed**              | Backend API + project memory                       |
-| `kirana/kirana-F/`       | `main` `96f1de9`, Phase 3 + desktop transport merged, **not pushed** | Web admin + desktop UI (React 19 + TS + Vite)      |
+| `kirana/kirana-F/`       | `main` `5799510`, Phase 3 + desktop transport merged, **not pushed** | Web admin + desktop UI (React 19 + TS + Vite)      |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
 | `kirana/Kirana-desktop/` | `main` `766dece`, 7 local commits, **not pushed**                  | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
