@@ -6,46 +6,17 @@ import {toBaseQuantity} from '@utils/units';
 import {saleValidation} from '@validations/index';
 import {applyMovement, StockContext} from './stock.service';
 import {applyCustomerEntry, applyRoundOff, nextDocumentNo, round2} from './billing';
+import {returnInclude, serializeReturn} from './sale.service';
 
 type Decimal = Prisma.Decimal;
 type SaleQuery = z.infer<typeof saleValidation.saleQuerySchema>;
 type ReturnInput = z.infer<typeof saleValidation.createReturnSchema>;
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
-
-export const returnInclude = {
-    createdBy: {select: {id: true, fullname: true}},
-    lines: {
-        include: {saleLine: {select: {productName: true, unit: true}}},
-        orderBy: {saleLine: {lineNo: 'asc'}},
-    },
-} satisfies Prisma.SaleReturnInclude;
-type ReturnRow = Prisma.SaleReturnGetPayload<{include: typeof returnInclude}>;
-
-export const serializeReturn = (r: ReturnRow) => ({
-    id: r.id,
-    saleId: r.saleId,
-    creditNoteNo: r.creditNoteNo,
-    createdAt: r.createdAt,
-    reason: r.reason,
-    refundMethod: r.refundMethod,
-    refundTotal: r.refundTotal.toFixed(2),
-    roundOff: r.roundOff.toFixed(2),
-    createdBy: r.createdBy,
-    lines: r.lines.map((l) => ({
-        id: l.id,
-        saleLineId: l.saleLineId,
-        productName: l.saleLine.productName,
-        unit: l.saleLine.unit,
-        quantity: l.quantity.toFixed(3),
-        disposition: l.disposition,
-        taxableValue: l.taxableValue.toFixed(2),
-        cgst: l.cgst.toFixed(2),
-        sgst: l.sgst.toFixed(2),
-        amount: l.amount.toFixed(2),
-        restockMovementId: l.restockMovementId,
-        damageMovementId: l.damageMovementId,
-    })),
-});
+const IST_MS = 330 * 60_000;
+const DAY_MS = 86_400_000;
+/** Start of the IST calendar day holding `at`; a plain YYYY-MM-DD parses into that day. */
+const istDay = (at: Date) =>
+    new Date(Math.floor((at.getTime() + IST_MS) / DAY_MS) * DAY_MS - IST_MS);
 
 const AMOUNTS = ['taxableValue', 'cgst', 'sgst', 'amount'] as const;
 type Amounts = Record<(typeof AMOUNTS)[number], Decimal>;
@@ -53,13 +24,19 @@ const pickAmounts = (f: (k: keyof Amounts) => Decimal) =>
     Object.fromEntries(AMOUNTS.map((k) => [k, f(k)])) as Amounts;
 
 class SaleReturnService {
-    /** Sales of the session store, newest first. `q` matches the invoice number or the customer. */
+    /**
+     * Sales of the session store, newest first. `q` matches the invoice number or the customer;
+     * `from` and `to` are whole IST days, both inclusive.
+     */
     async list(ctx: Pick<StockContext, 'kiranaId' | 'storeId'>, query: SaleQuery) {
         const q = query.q;
         const where: Prisma.SaleWhereInput = {
             kiranaId: ctx.kiranaId,
             storeId: ctx.storeId,
-            ...(query.from || query.to ? {createdAt: {gte: query.from, lte: query.to}} : {}),
+            createdAt: {
+                gte: query.from && istDay(query.from),
+                lt: query.to && new Date(istDay(query.to).getTime() + DAY_MS),
+            },
             ...(q
                 ? {
                       OR: [
@@ -244,8 +221,12 @@ class SaleReturnService {
             at: now,
         });
 
-        const created = [];
-        for (const l of lines) {
+        // Stock in productId order, as the sale does, so concurrent sales and returns can't deadlock.
+        const moved = new Map<(typeof lines)[number], {restock: string; damage: string | null}>();
+        const byProduct = [...lines].sort((a, b) =>
+            a.saleLine.productId.localeCompare(b.saleLine.productId),
+        );
+        for (const l of byProduct) {
             const move = {
                 productId: l.saleLine.productId,
                 quantity: l.baseQuantity,
@@ -261,15 +242,16 @@ class SaleReturnService {
                           reason: `Returned damaged: ${input.reason}`,
                       })
                     : null;
-            created.push({
-                saleLineId: l.saleLine.id,
-                quantity: l.input.quantity,
-                disposition: l.input.disposition,
-                ...l.amounts,
-                restockMovementId: restock.id,
-                damageMovementId: damage?.id ?? null,
-            });
+            moved.set(l, {restock: restock.id, damage: damage?.id ?? null});
         }
+        const created = lines.map((l) => ({
+            saleLineId: l.saleLine.id,
+            quantity: l.input.quantity,
+            disposition: l.input.disposition,
+            ...l.amounts,
+            restockMovementId: moved.get(l)!.restock,
+            damageMovementId: moved.get(l)!.damage,
+        }));
 
         const row = await tx.saleReturn.create({
             data: {
