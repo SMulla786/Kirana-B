@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
-import {PaymentMethod, Prisma, UnitCode} from '@prisma/client';
+import {CustomerEntryType, PaymentMethod, Prisma, UnitCode} from '@prisma/client';
+import {applyCustomerEntry} from '@services/kirana/billing';
 import {api, bearer, createOwner, prisma, uniqueName, uniquePhone} from './helpers';
 
 /** An owner with the ids the sale rows need. */
@@ -124,3 +125,46 @@ export const seedSale = (
         include: {lines: {orderBy: {lineNo: 'asc'}}},
     });
 };
+
+/** A real POS sale of `quantity` x 10.00 to a customer: `cash` paid now, the rest on credit. */
+export const creditSale = async (
+    s: Shop,
+    customerId: string,
+    productId: string,
+    quantity: number,
+    cash = 0,
+) => {
+    const total = quantity * 10;
+    const payments = [{method: 'CREDIT', amount: (total - cash).toFixed(2)}];
+    if (cash) payments.push({method: 'CASH', amount: cash.toFixed(2)});
+    const res = await api
+        .post('/api/v1/pos/sales')
+        .set(bearer(s.token))
+        .send({
+            customerId,
+            lines: [{productId, unit: 'PIECE', quantity}],
+            payments,
+            idempotencyKey: randomUUID(),
+        })
+        .expect(201);
+    return res.body.data as {id: string; invoiceNo: string; lines: {id: string}[]};
+};
+
+/**
+ * Posts one ledger entry straight through applyCustomerEntry, as the adjustment and reversal endpoints
+ * do (A-031), for tests that need an entry those endpoints don't make here.
+ */
+export const postEntry = (
+    s: Shop,
+    customerId: string,
+    entry: {type: CustomerEntryType; amount: string; reason?: string; reversesId?: string},
+) =>
+    prisma.$transaction((tx) =>
+        applyCustomerEntry(tx, {
+            kiranaId: s.kiranaId,
+            customerId,
+            actorId: s.userId,
+            ...entry,
+            amount: new Prisma.Decimal(entry.amount),
+        }),
+    );
