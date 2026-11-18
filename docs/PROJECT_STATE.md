@@ -1,8 +1,8 @@
 # Project state
 
 _Last updated 2026-11-18 · **Phase 3 (web POS) is merged locally on `main`** in Kirana-B (`5c9c869`) and
-kirana-F (`5799510`), with the review and live-pass fixes. **Not pushed.** The browser re-pass of the fixes
-is pending, then the owner's OK to push. Phase 2 is merged and pushed. The desktop shell (Tauri,
+kirana-F (`5799510`), with the review and live-pass fixes, and the live re-pass is green. **Not pushed:** it waits for the
+owner's OK. Phase 2 is merged and pushed. The desktop shell (Tauri,
 A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
 
 ## Phase 3: what was built (2026-11-16)
@@ -98,7 +98,7 @@ in the Tauri shell later. The model is in DECISIONS A-028.
 | Live     | Browser pass (kirana-44) on kirana-F `f507ce6` + Kirana-B `4f2f974`, `kirana_live_test` | 10 pass, 1 partial, 2 fail → D1–D6, fixed on the mains |
 | Live     | D1 two-till API check on Kirana-B main `5c9c869`         | ✅ 12/12                        |
 | Live     | Browser re-pass on kirana-F `96f1de9` + Kirana-B `5c9c869` | ✅ D1 notice, D2, D3 (cart lines 68 → 196 px at 1024×600), D5, D6, 750 g = ₹33.75, hold retry → one bill. ❌ 3 fast scans added 2 (D7, older bug) → fixed in `5799510` with a test |
-| Live     | D7 recheck on kirana-F `5799510`                          | ⏳ requested                    |
+| Live     | D7 recheck on kirana-F `5799510` + Kirana-B `5c9c869`     | ✅ 3 fast scans → +3, 4 of 4 rounds, all lookup codes whole; an unknown code then a good one in one burst → only the good one added |
 
 UI skills used: `frontend-design`, `emil-design-eng`, `apple-design` and `break-ui`. `pick-ui-library` and
 `prototype` aren't installed, and no UI dependency was added.
@@ -362,7 +362,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Desktop POS shell          | 🟡     | Tauri shell wraps kirana-F (A-029); Rust never compiled (no toolchain); hardware is O-4       |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
-| POS (web): cart, scan, held bills | 🟡 | Phase 3 merged locally with all fixes; browser re-pass and push pending            |
+| POS (web): cart, scan, held bills | ✅ | Phase 3 merged locally and live-passed; push pending                               |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
@@ -424,6 +424,9 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
       list is capped at 200 per store.
     - **Not run:** no concurrent-recall test (one conditional `updateMany` decides two claims; the 404 is
       tested in sequence), and no real hardware scanner test (the wedge is simulated in jsdom).
+    - **Unknown scans:** the "No product with that code" message is replaced by the next good scan within
+      about 1.5 s, so a fast cashier can miss that an item wasn't added. Decide on a persistent alert or a
+      sound (with O-4 hardware).
     - **Tiles:** only the favourites and category grids show tiles, so a product with neither is found
       through search only (live-pass D4).
     - **Shortcut:** `src/docs/openapi.ts` emits nullable registered refs as `allOf + nullable`, and
@@ -479,7 +482,6 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
 2. **Phase 3 finish:** merged locally, with the migrations applied (2026-11-18).
-   - Record the browser re-pass of D1–D6 (kirana-44), and fix anything it finds.
    - With the owner's OK, push Kirana-B and kirana-F `main` (and Kirana-desktop), then confirm CI is green.
    - The desktop app has never compiled. Installing Rust + MSVC is the owner's decision.
 3. **Then, in a fresh chat:** Phase 4 (checkout, payments, invoices, receipts, returns). Use the blueprint

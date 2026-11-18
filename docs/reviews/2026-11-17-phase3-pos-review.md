@@ -125,5 +125,7 @@ Also in `5c9c869`: concurrent same-key stock movements (Phase 2 code) now replay
   D6, plus 750 g = ₹33.75 and a hold retry giving one bill.
 - **Fail:** three fast scans added 2 (**D7**, a bug from before this review). When a lookup resolved, it
   cleared the search box again, which wiped the next half-typed code. Fixed in kirana-F `5799510`: the box
-  is cleared only at Enter. A unit test reproduces the timing, fails before the fix and passes after; the
-  live recheck was requested.
+  is cleared only at Enter. A unit test reproduces the timing, fails before the fix and passes after. The
+  live recheck passed: 3 fast scans gave +3, 4 of 4 rounds.
+
+**Verdict:** all acceptance criteria are met on the merged mains. Phase 3 is accepted, pending the push.
