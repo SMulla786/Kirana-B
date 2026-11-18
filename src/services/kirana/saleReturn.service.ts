@@ -238,6 +238,7 @@ class SaleReturnService {
                           ...move,
                           type: 'DAMAGE',
                           reason: `Returned damaged: ${input.reason}`,
+                          offsetsReturn: true,
                       })
                     : null;
             moved.set(l, {restock: restock.id, damage: damage?.id ?? null});

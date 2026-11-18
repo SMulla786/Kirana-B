@@ -20,6 +20,11 @@ export type MovementInput = {
     reason?: string;
     reference?: string;
     idempotencyKey?: string;
+    /**
+     * Internal only (no API schema exposes it): the write-off leg of a damaged sales return. It follows
+     * a SALE_RETURN of the same quantity, so its net effect is zero even when stock was already negative.
+     */
+    offsetsReturn?: boolean;
 };
 
 /** +1 adds stock, -1 removes it, 0 takes the sign from the quantity (ADJUSTMENT). */
@@ -112,7 +117,12 @@ export const applyMovement = async (
     if (input.type === 'OPENING' && (await tx.stockMovement.count({where: key}))) {
         throw new ApiError(409, 'Opening stock is already recorded. Use an adjustment instead');
     }
-    if (delta.isNeg() && balance.quantity.isNeg() && !MAY_GO_NEGATIVE.has(input.type)) {
+    if (
+        delta.isNeg() &&
+        balance.quantity.isNeg() &&
+        !MAY_GO_NEGATIVE.has(input.type) &&
+        !input.offsetsReturn
+    ) {
         throw new ApiError(409, 'Insufficient stock', [
             {field: 'quantity', available: balance.quantity.minus(delta).toFixed(3)},
         ]);

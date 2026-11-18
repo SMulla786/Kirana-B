@@ -136,7 +136,10 @@ function checkPayments(ctx: SaleContext, input: CompleteInput, total: Decimal) {
 
 export const returnInclude = {
     createdBy: {select: {id: true, fullname: true}},
-    lines: {include: {saleLine: {select: {productName: true, unit: true}}}},
+    lines: {
+        orderBy: [{saleLine: {lineNo: 'asc'}}, {id: 'asc'}],
+        include: {saleLine: {select: {productName: true, unit: true}}},
+    },
 } satisfies Prisma.SaleReturnInclude;
 type ReturnRow = Prisma.SaleReturnGetPayload<{include: typeof returnInclude}>;
 

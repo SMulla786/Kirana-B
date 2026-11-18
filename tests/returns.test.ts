@@ -246,4 +246,23 @@ describe('sales returns', () => {
         await giveBack(s.token, randomUUID(), body).expect(404);
         expect(await prisma.saleReturn.count({where: {saleId: sale.id}})).toBe(0);
     });
+
+    it('takes a damaged return even when the sale had taken stock below zero', async () => {
+        const s = await shop();
+        const p = await product(s.token); // no opening stock: the sale goes negative (allowed)
+        const sold = await api
+            .post('/api/v1/pos/sales')
+            .set(bearer(s.token))
+            .send({
+                lines: [{productId: p.id, unit: 'PIECE', quantity: 2}],
+                payments: [{method: 'CASH', amount: '20.00'}],
+                idempotencyKey: randomUUID(),
+            })
+            .expect(201);
+        expect(await stockOf(s, p.id)).toBe('-2.000');
+        const sl = sold.body.data.lines[0].id as string;
+        await giveBack(s.token, sold.body.data.id, {lines: [line(sl, 1, 'DAMAGED')]}).expect(201);
+        // Back in, then written off: net zero, so it must not trip "Insufficient stock".
+        expect(await stockOf(s, p.id)).toBe('-2.000');
+    });
 });
