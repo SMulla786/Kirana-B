@@ -347,6 +347,11 @@
           "invoicePrefix": {
             "type": "string"
           },
+          "upiId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The shop's UPI ID for the static checkout QR (O-10); payments stay RECORDED"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -389,6 +394,7 @@
           "gstScheme",
           "roundOff",
           "invoicePrefix",
+          "upiId",
           "createdAt",
           "stores"
         ]
@@ -1027,7 +1033,7 @@
           "createdAt"
         ]
       },
-      "Customer": {
+      "CustomerSummary": {
         "type": "object",
         "properties": {
           "id": {
@@ -1039,12 +1045,586 @@
           },
           "phoneNumber": {
             "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "outstanding": {
+            "type": "string",
+            "description": "What the customer owes now; negative means money held on account",
+            "example": "45.00"
+          },
+          "creditLimit": {
+            "type": "string",
+            "nullable": true,
+            "description": "null: no limit",
+            "example": "45.00"
+          },
+          "available": {
+            "type": "string",
+            "nullable": true,
+            "description": "creditLimit - outstanding (negative when over); null: no limit",
+            "example": "45.00"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Latest ledger entry"
           }
         },
         "required": [
           "id",
           "name",
-          "phoneNumber"
+          "phoneNumber",
+          "tags",
+          "isActive",
+          "outstanding",
+          "creditLimit",
+          "available",
+          "lastActivityAt"
+        ]
+      },
+      "CustomerProfile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomerSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "notes": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "address",
+              "notes",
+              "createdAt"
+            ]
+          }
+        ]
+      },
+      "CustomerEntryType": {
+        "type": "string",
+        "enum": [
+          "CREDIT_SALE",
+          "RETURN_CREDIT",
+          "OPENING_BALANCE",
+          "PAYMENT",
+          "ADJUSTMENT",
+          "REVERSAL"
+        ]
+      },
+      "PaymentMethod": {
+        "type": "string",
+        "enum": [
+          "CASH",
+          "UPI",
+          "CARD",
+          "BANK_TRANSFER",
+          "CREDIT"
+        ]
+      },
+      "LedgerEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CustomerEntryType"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Signed: + the customer owes more",
+            "example": "45.00"
+          },
+          "debit": {
+            "type": "string",
+            "description": "amount when positive, else 0.00",
+            "example": "45.00"
+          },
+          "credit": {
+            "type": "string",
+            "description": "-amount when negative, else 0.00",
+            "example": "45.00"
+          },
+          "balanceAfter": {
+            "type": "string",
+            "description": "Running balance after this entry",
+            "example": "45.00"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "sale": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "invoiceNo": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "invoiceNo"
+            ]
+          },
+          "saleReturn": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "creditNoteNo": {
+                "type": "string"
+              },
+              "saleId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "id",
+              "creditNoteNo",
+              "saleId"
+            ]
+          },
+          "payment": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "receiptNo": {
+                "type": "string"
+              },
+              "method": {
+                "$ref": "#/components/schemas/PaymentMethod"
+              },
+              "reference": {
+                "type": "string",
+                "nullable": true
+              },
+              "receivedOn": {
+                "type": "string",
+                "description": "IST calendar day",
+                "example": "2026-11-18"
+              }
+            },
+            "required": [
+              "id",
+              "receiptNo",
+              "method",
+              "reference",
+              "receivedOn"
+            ]
+          },
+          "reverses": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "$ref": "#/components/schemas/CustomerEntryType"
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ]
+          },
+          "reversedBy": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "reason",
+              "createdAt"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "createdAt",
+          "amount",
+          "debit",
+          "credit",
+          "balanceAfter",
+          "reason",
+          "actor",
+          "sale",
+          "saleReturn",
+          "payment",
+          "reverses",
+          "reversedBy"
+        ]
+      },
+      "CustomerStatement": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phoneNumber": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "phoneNumber"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "nullable": true,
+            "description": "IST calendar day",
+            "example": "2026-11-18"
+          },
+          "to": {
+            "type": "string",
+            "nullable": true,
+            "description": "IST calendar day",
+            "example": "2026-11-18"
+          },
+          "openingBalance": {
+            "type": "string",
+            "description": "Balance before `from` (0.00 without it)",
+            "example": "45.00"
+          },
+          "debitTotal": {
+            "type": "string",
+            "description": "Over the whole range, not just this page",
+            "example": "45.00"
+          },
+          "creditTotal": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "closingBalance": {
+            "type": "string",
+            "description": "openingBalance + debitTotal - creditTotal: the balance at the end of `to`",
+            "example": "45.00"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerEntry"
+            },
+            "description": "Oldest first; this page only"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "customer",
+          "from",
+          "to",
+          "openingBalance",
+          "debitTotal",
+          "creditTotal",
+          "closingBalance",
+          "entries",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "CustomerInvoice": {
+        "type": "object",
+        "properties": {
+          "saleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNo": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "creditAmount": {
+            "type": "string",
+            "description": "The part of the bill put on credit",
+            "example": "45.00"
+          },
+          "returnedToAccount": {
+            "type": "string",
+            "description": "Returns refunded to the account (CREDIT)",
+            "example": "45.00"
+          },
+          "allocated": {
+            "type": "string",
+            "description": "Collections set against it; reversed ones excluded",
+            "example": "45.00"
+          },
+          "due": {
+            "type": "string",
+            "description": "max(0, creditAmount - returnedToAccount - allocated)",
+            "example": "45.00"
+          }
+        },
+        "required": [
+          "saleId",
+          "invoiceNo",
+          "createdAt",
+          "total",
+          "creditAmount",
+          "returnedToAccount",
+          "allocated",
+          "due"
+        ]
+      },
+      "CustomerPayment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "receiptNo": {
+            "type": "string",
+            "example": "RCPT/26-27/00001"
+          },
+          "financialYear": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phoneNumber": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "phoneNumber"
+            ]
+          },
+          "method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Decimal, 2 places",
+            "example": "45.00"
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          },
+          "receivedOn": {
+            "type": "string",
+            "description": "IST calendar day",
+            "example": "2026-11-18"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECORDED",
+              "CONFIRMED"
+            ],
+            "description": "Always RECORDED: entered by staff, never bank-confirmed (O-10)"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "saleId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "invoiceNo": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "string",
+                  "description": "Decimal, 2 places",
+                  "example": "45.00"
+                }
+              },
+              "required": [
+                "saleId",
+                "invoiceNo",
+                "amount"
+              ]
+            }
+          },
+          "unallocated": {
+            "type": "string",
+            "description": "Left on account",
+            "example": "45.00"
+          },
+          "ledgerEntryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "balanceAfter": {
+            "type": "string",
+            "description": "The customer's balance right after it",
+            "example": "45.00"
+          },
+          "reversal": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "entryId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "entryId",
+              "reason",
+              "createdAt"
+            ],
+            "description": "Set once its PAYMENT entry is reversed"
+          },
+          "createdBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullname": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullname"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "receiptNo",
+          "financialYear",
+          "customer",
+          "method",
+          "amount",
+          "reference",
+          "receivedOn",
+          "note",
+          "status",
+          "allocations",
+          "unallocated",
+          "ledgerEntryId",
+          "balanceAfter",
+          "reversal",
+          "createdBy",
+          "createdAt"
         ]
       },
       "HeldBillSummary": {
@@ -1114,6 +1694,27 @@
           "createdAt"
         ]
       },
+      "Customer": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "phoneNumber"
+        ]
+      },
       "HeldBill": {
         "type": "object",
         "properties": {
@@ -1126,14 +1727,7 @@
             "nullable": true
           },
           "customer": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Customer"
-              },
-              {
-                "nullable": true
-              }
-            ]
+            "$ref": "#/components/schemas/Customer"
           },
           "lines": {
             "type": "array",
@@ -1398,6 +1992,52 @@
             "type": "string",
             "description": "Payable",
             "example": "45.00"
+          },
+          "customer": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phoneNumber": {
+                "type": "string"
+              },
+              "isActive": {
+                "type": "boolean"
+              },
+              "outstanding": {
+                "type": "string",
+                "description": "What the customer owes now; negative means money held on account",
+                "example": "45.00"
+              },
+              "creditLimit": {
+                "type": "string",
+                "nullable": true,
+                "description": "null: no limit",
+                "example": "45.00"
+              },
+              "available": {
+                "type": "string",
+                "nullable": true,
+                "description": "creditLimit - outstanding (negative when over); null: no limit",
+                "example": "45.00"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "phoneNumber",
+              "isActive",
+              "outstanding",
+              "creditLimit",
+              "available"
+            ],
+            "description": "The bill customer, to show outstanding and limit before credit"
           }
         },
         "required": [
@@ -1410,17 +2050,8 @@
           "cgstTotal",
           "sgstTotal",
           "roundOff",
-          "total"
-        ]
-      },
-      "PaymentMethod": {
-        "type": "string",
-        "enum": [
-          "CASH",
-          "UPI",
-          "CARD",
-          "BANK_TRANSFER",
-          "CREDIT"
+          "total",
+          "customer"
         ]
       },
       "SalePayment": {
@@ -3364,6 +3995,11 @@
                   "invoicePrefix": {
                     "type": "string",
                     "pattern": "^[A-Z0-9-]{1,8}$"
+                  },
+                  "upiId": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,63}$"
                   }
                 },
                 "additionalProperties": false
@@ -6448,8 +7084,8 @@
         "tags": [
           "Customers"
         ],
-        "summary": "Search customers by name or phone (up to 20)",
-        "description": "Requires permission `customers.manage`.",
+        "summary": "List and search customers with what they owe",
+        "description": "Requires permission `customers.view`.",
         "security": [
           {
             "bearer": []
@@ -6466,6 +7102,77 @@
             },
             "required": false,
             "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "required": false,
+            "name": "tag",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "archived",
+                "all"
+              ],
+              "default": "active"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "due",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "outstanding",
+                "recent"
+              ],
+              "default": "name"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
             "in": "query"
           }
         ],
@@ -6487,10 +7194,30 @@
                       "type": "string"
                     },
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Customer"
-                      }
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerSummary"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "pageSize"
+                      ]
                     },
                     "errors": {
                       "type": "array",
@@ -6545,7 +7272,7 @@
         "tags": [
           "Customers"
         ],
-        "summary": "Create a customer",
+        "summary": "Add a customer. A credit limit needs customers.credit",
         "description": "Requires permission `customers.manage`.",
         "security": [
           {
@@ -6570,6 +7297,41 @@
                   "phoneNumber": {
                     "type": "string",
                     "pattern": "^[6-9]\\d{9}$"
+                  },
+                  "address": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 30
+                    },
+                    "maxItems": 10
+                  },
+                  "creditLimit": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
+                  },
+                  "sharedPhone": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -6599,7 +7361,7 @@
                       "type": "string"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/Customer"
+                      "$ref": "#/components/schemas/CustomerProfile"
                     },
                     "errors": {
                       "type": "array",
@@ -6649,7 +7411,1294 @@
             }
           },
           "409": {
-            "description": "Phone already in use",
+            "description": "Same name already on this phone, or the phone belongs to another customer (resend with sharedPhone: true). errors[0].customers lists them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Customer profile with outstanding and limit",
+        "description": "Requires permission `customers.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerProfile"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Edit or archive a customer. creditLimit needs customers.credit",
+        "description": "Requires permission `customers.manage`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "phoneNumber": {
+                    "type": "string",
+                    "pattern": "^[6-9]\\d{9}$"
+                  },
+                  "address": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 30
+                    },
+                    "maxItems": 10
+                  },
+                  "creditLimit": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
+                  },
+                  "sharedPhone": {
+                    "type": "boolean"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerProfile"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same name already on this phone, or the phone belongs to another customer (resend with sharedPhone: true). errors[0].customers lists them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/ledger": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Statement: opening balance, entries with the running balance, totals and closing balance",
+        "description": "Requires permission `customers.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerStatement"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/invoices": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Credit invoices with what is still due, oldest first",
+        "description": "Requires permission `customers.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "due",
+                "all"
+              ],
+              "default": "due"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CustomerInvoice"
+                      }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/payments": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Record a collection: a receipt number, a PAYMENT ledger entry and allocations to credit invoices; the rest stays on account",
+        "description": "Requires permission `customers.collect`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "CASH",
+                      "UPI",
+                      "CARD",
+                      "BANK_TRANSFER",
+                      "CREDIT"
+                    ]
+                  },
+                  "reference": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "receivedOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "allocations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "saleId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "saleId",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50,
+                    "default": []
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "amount",
+                  "method",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed: the same payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerPayment"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerPayment"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An allocation is more than the invoice still owes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/payments/{paymentId}": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "A collection receipt, for reprint",
+        "description": "Requires permission `customers.view`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "paymentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerPayment"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/adjustments": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Post an opening balance (once per customer) or an adjustment, with a reason",
+        "description": "Requires permission `customers.credit`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "OPENING_BALANCE",
+                      "ADJUSTMENT"
+                    ]
+                  },
+                  "amount": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "type",
+                  "amount",
+                  "reason",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LedgerEntry"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LedgerEntry"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An opening balance is already posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}/ledger/{entryId}/reverse": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Cancel an opening balance, adjustment or payment with an equal and opposite REVERSAL entry",
+        "description": "Requires permission `customers.credit`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "reason",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotency key replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LedgerEntry"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LedgerEntry"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already reversed, a reversal, or a sale/return entry (correct those with a sales return)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7404,7 +9453,7 @@
         "tags": [
           "POS"
         ],
-        "summary": "Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs a customer and pos.credit",
+        "summary": "Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs an active customer and pos.credit, and going over their credit limit needs overrideCreditLimit with pos.credit.override",
         "description": "Requires permission `pos.use`.",
         "security": [
           {
@@ -7547,6 +9596,9 @@
                     "type": "string",
                     "maxLength": 120
                   },
+                  "overrideCreditLimit": {
+                    "type": "boolean"
+                  },
                   "idempotencyKey": {
                     "type": "string",
                     "minLength": 8,
@@ -7668,6 +9720,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Over the credit limit: errors[0] has outstanding, creditLimit and available",
             "content": {
               "application/json": {
                 "schema": {

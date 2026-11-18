@@ -14,9 +14,13 @@ export const PERMISSIONS = [
     'pos.discount', // give a line discount
     'pos.price.override', // sell at a price other than the catalogue's
     'pos.credit', // complete a sale (part) on customer credit (udhaar)
+    'pos.credit.override', // complete a credit sale beyond the customer's credit limit
     'sales.view', // sales history, invoice detail and reprint
     'sales.return', // record a sales return and refund
-    'customers.manage',
+    'customers.view', // customer list, profile, ledger/statement and invoice dues
+    'customers.manage', // add and edit customers (not their credit limit)
+    'customers.collect', // record a collection (udhaar paid back)
+    'customers.credit', // credit limits, opening balances, adjustments and reversals
     'purchases.manage',
     'reports.view',
     'finance.view',
@@ -29,7 +33,15 @@ const ALL = [...PERMISSIONS];
 export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
     OWNER: ALL,
     MANAGER: ALL.filter((p) => p !== 'business.update'),
-    CASHIER: ['business.read', 'pos.use', 'catalog.read', 'customers.manage', 'sales.view'],
+    CASHIER: [
+        'business.read',
+        'pos.use',
+        'catalog.read',
+        'customers.view',
+        'customers.manage',
+        'customers.collect',
+        'sales.view',
+    ],
     INVENTORY_MANAGER: [
         'business.read',
         'catalog.read',
@@ -46,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
         'reports.view',
         'finance.view',
         'sales.view',
+        'customers.view',
     ],
     STAFF: ['business.read', 'catalog.read'],
 };

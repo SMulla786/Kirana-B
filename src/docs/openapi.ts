@@ -22,9 +22,9 @@ import {
     businessValidation,
     catalogValidation,
     commonValidation,
-    clientValidation,
     posValidation,
     saleValidation,
+    customerValidation,
 } from '@validations/index';
 
 extendZodWithOpenApi(z);
@@ -117,6 +117,10 @@ const Business = z
         gstScheme: z.nativeEnum(GstScheme).openapi('GstScheme'),
         roundOff: z.nativeEnum(RoundOffRule).openapi('RoundOffRule'),
         invoicePrefix: z.string(),
+        upiId: z.string().nullable().openapi({
+            description:
+                "The shop's UPI ID for the static checkout QR (O-10); payments stay RECORDED",
+        }),
         createdAt: date,
         stores: z.array(Store),
     })
@@ -294,6 +298,16 @@ const HeldBillSummary = z
 const paymentMethod = z.nativeEnum(PaymentMethod).openapi('PaymentMethod');
 const pct = z.string().openapi({example: '5.00', description: 'GST rate, percent'});
 const customerRef = z.object({id, name: z.string(), phoneNumber: z.string()});
+// Phase 5 (A-031): what a customer owes against their limit.
+const customerCredit = {
+    outstanding: money.openapi({
+        description: 'What the customer owes now; negative means money held on account',
+    }),
+    creditLimit: money.nullable().openapi({description: 'null: no limit'}),
+    available: money.nullable().openapi({
+        description: 'creditLimit - outstanding (negative when over); null: no limit',
+    }),
+};
 const CheckoutLine = z
     .object({
         productId: id,
@@ -327,6 +341,12 @@ const CheckoutPreview = z
         roundOffRule: z.nativeEnum(RoundOffRule),
         lines: z.array(CheckoutLine),
         ...totalsShape,
+        customer: z
+            .object({...customerRef.shape, isActive: z.boolean(), ...customerCredit})
+            .nullable()
+            .openapi({
+                description: 'The bill customer, to show outstanding and limit before credit',
+            }),
     })
     .openapi('CheckoutPreview');
 const SalePaymentOut = z
@@ -417,8 +437,107 @@ const SaleSummary = z
         methods: z.array(paymentMethod),
     })
     .openapi('SaleSummary');
-// Registered so Phase 5 and the web can share the type; no route returns it yet.
-z.nativeEnum(CustomerEntryType).openapi('CustomerEntryType');
+// Phase 5: customers, udhaar ledger and collections (A-031).
+const entryType = z.nativeEnum(CustomerEntryType).openapi('CustomerEntryType');
+const day = z.string().openapi({example: '2026-11-18', description: 'IST calendar day'});
+const CustomerSummary = z
+    .object({
+        ...customerRef.shape,
+        tags: z.array(z.string()),
+        isActive: z.boolean(),
+        ...customerCredit,
+        lastActivityAt: date.nullable().openapi({description: 'Latest ledger entry'}),
+    })
+    .openapi('CustomerSummary');
+const CustomerProfile = CustomerSummary.extend({
+    address: z.string(),
+    notes: z.string().nullable(),
+    createdAt: date,
+}).openapi('CustomerProfile');
+const LedgerEntry = z
+    .object({
+        id,
+        type: entryType,
+        createdAt: date,
+        amount: money.openapi({description: 'Signed: + the customer owes more'}),
+        debit: money.openapi({description: 'amount when positive, else 0.00'}),
+        credit: money.openapi({description: '-amount when negative, else 0.00'}),
+        balanceAfter: money.openapi({description: 'Running balance after this entry'}),
+        reason: z.string().nullable(),
+        actor: personRef,
+        sale: z.object({id, invoiceNo: z.string()}).nullable(),
+        saleReturn: z.object({id, creditNoteNo: z.string(), saleId: id}).nullable(),
+        payment: z
+            .object({
+                id,
+                receiptNo: z.string(),
+                method: paymentMethod,
+                reference: z.string().nullable(),
+                receivedOn: day,
+            })
+            .nullable(),
+        reverses: z.object({id, type: entryType}).nullable(),
+        reversedBy: z.object({id, reason: z.string().nullable(), createdAt: date}).nullable(),
+    })
+    .openapi('LedgerEntry');
+const CustomerStatement = z
+    .object({
+        customer: customerRef,
+        from: day.nullable(),
+        to: day.nullable(),
+        openingBalance: money.openapi({description: 'Balance before `from` (0.00 without it)'}),
+        debitTotal: money.openapi({description: 'Over the whole range, not just this page'}),
+        creditTotal: money,
+        closingBalance: money.openapi({
+            description:
+                'openingBalance + debitTotal - creditTotal: the balance at the end of `to`',
+        }),
+        entries: z.array(LedgerEntry).openapi({description: 'Oldest first; this page only'}),
+        total: z.number().int(),
+        page: z.number().int(),
+        pageSize: z.number().int(),
+    })
+    .openapi('CustomerStatement');
+const CustomerInvoice = z
+    .object({
+        saleId: id,
+        invoiceNo: z.string(),
+        createdAt: date,
+        total: money,
+        creditAmount: money.openapi({description: 'The part of the bill put on credit'}),
+        returnedToAccount: money.openapi({description: 'Returns refunded to the account (CREDIT)'}),
+        allocated: money.openapi({
+            description: 'Collections set against it; reversed ones excluded',
+        }),
+        due: money.openapi({description: 'max(0, creditAmount - returnedToAccount - allocated)'}),
+    })
+    .openapi('CustomerInvoice');
+const CustomerPaymentOut = z
+    .object({
+        id,
+        receiptNo: z.string().openapi({example: 'RCPT/26-27/00001'}),
+        financialYear: z.string(),
+        customer: customerRef,
+        method: paymentMethod,
+        amount: money,
+        reference: z.string().nullable(),
+        receivedOn: day,
+        note: z.string().nullable(),
+        status: z.nativeEnum(PaymentStatus).openapi({
+            description: 'Always RECORDED: entered by staff, never bank-confirmed (O-10)',
+        }),
+        allocations: z.array(z.object({saleId: id, invoiceNo: z.string(), amount: money})),
+        unallocated: money.openapi({description: 'Left on account'}),
+        ledgerEntryId: id,
+        balanceAfter: money.openapi({description: "The customer's balance right after it"}),
+        reversal: z
+            .object({entryId: id, reason: z.string().nullable(), createdAt: date})
+            .nullable()
+            .openapi({description: 'Set once its PAYMENT entry is reversed'}),
+        createdBy: personRef,
+        createdAt: date,
+    })
+    .openapi('CustomerPayment');
 
 const Health = z.object({status: z.string(), db: z.string()});
 const NewBusiness = z.object({
@@ -671,19 +790,147 @@ stock(
     },
 );
 
-// Customers (minimal; Phase 5 builds the real customer work)
-const cust = (m: Method, path: string, summary: string, rest: Partial<Op>) =>
-    route({method: m, path, tag: 'Customers', summary, permission: 'customers.manage', ...rest});
-cust('get', '/customers', 'Search customers by name or phone (up to 20)', {
-    query: clientValidation.customerQuerySchema,
-    data: z.array(Customer),
+// Customers, udhaar ledger and collections (Phase 5, A-031)
+const cv5 = customerValidation;
+const cust = (m: Method, path: string, summary: string, permission: string, rest: Partial<Op>) =>
+    route({method: m, path, tag: 'Customers', summary, permission, ...rest});
+const noCustomer = {404: {description: 'Customer not found', schema: ErrorResponse}};
+const phoneClash = {
+    409: {
+        description:
+            'Same name already on this phone, or the phone belongs to another customer (resend with sharedPhone: true). errors[0].customers lists them',
+        schema: ErrorResponse,
+    },
+};
+cust('get', '/customers', 'List and search customers with what they owe', 'customers.view', {
+    query: cv5.customerQuerySchema,
+    data: pageOf(CustomerSummary),
 });
-cust('post', '/customers', 'Create a customer', {
-    body: clientValidation.createCustomerSchema,
-    status: 201,
-    data: Customer,
-    extraResponses: {409: {description: 'Phone already in use', schema: ErrorResponse}},
+cust(
+    'post',
+    '/customers',
+    'Add a customer. A credit limit needs customers.credit',
+    'customers.manage',
+    {
+        body: cv5.createCustomerSchema,
+        status: 201,
+        data: CustomerProfile,
+        extraResponses: phoneClash,
+    },
+);
+cust('get', '/customers/{id}', 'Customer profile with outstanding and limit', 'customers.view', {
+    params: idParams,
+    data: CustomerProfile,
+    extraResponses: noCustomer,
 });
+cust(
+    'patch',
+    '/customers/{id}',
+    'Edit or archive a customer. creditLimit needs customers.credit',
+    'customers.manage',
+    {
+        params: idParams,
+        body: cv5.updateCustomerSchema,
+        data: CustomerProfile,
+        extraResponses: {...noCustomer, ...phoneClash},
+    },
+);
+cust(
+    'get',
+    '/customers/{id}/ledger',
+    'Statement: opening balance, entries with the running balance, totals and closing balance',
+    'customers.view',
+    {
+        params: idParams,
+        query: cv5.ledgerQuerySchema,
+        data: CustomerStatement,
+        extraResponses: noCustomer,
+    },
+);
+cust(
+    'get',
+    '/customers/{id}/invoices',
+    'Credit invoices with what is still due, oldest first',
+    'customers.view',
+    {
+        params: idParams,
+        query: cv5.invoiceQuerySchema,
+        data: z.array(CustomerInvoice),
+        extraResponses: noCustomer,
+    },
+);
+cust(
+    'post',
+    '/customers/{id}/payments',
+    'Record a collection: a receipt number, a PAYMENT ledger entry and allocations to credit invoices; the rest stays on account',
+    'customers.collect',
+    {
+        params: idParams,
+        body: cv5.collectPaymentSchema,
+        status: 201,
+        data: CustomerPaymentOut,
+        extraResponses: {
+            ...noCustomer,
+            200: {
+                description: 'Idempotency key replayed: the same payment',
+                schema: envelope(CustomerPaymentOut),
+            },
+            409: {
+                description: 'An allocation is more than the invoice still owes',
+                schema: ErrorResponse,
+            },
+        },
+    },
+);
+cust(
+    'get',
+    '/customers/{id}/payments/{paymentId}',
+    'A collection receipt, for reprint',
+    'customers.view',
+    {
+        params: cv5.paymentParams,
+        data: CustomerPaymentOut,
+        extraResponses: {404: {description: 'Not found', schema: ErrorResponse}},
+    },
+);
+cust(
+    'post',
+    '/customers/{id}/adjustments',
+    'Post an opening balance (once per customer) or an adjustment, with a reason',
+    'customers.credit',
+    {
+        params: idParams,
+        body: cv5.adjustmentSchema,
+        status: 201,
+        data: LedgerEntry,
+        extraResponses: {
+            ...noCustomer,
+            200: {description: 'Idempotency key replayed', schema: envelope(LedgerEntry)},
+            409: {description: 'An opening balance is already posted', schema: ErrorResponse},
+        },
+    },
+);
+cust(
+    'post',
+    '/customers/{id}/ledger/{entryId}/reverse',
+    'Cancel an opening balance, adjustment or payment with an equal and opposite REVERSAL entry',
+    'customers.credit',
+    {
+        params: cv5.entryParams,
+        body: cv5.reverseEntrySchema,
+        status: 201,
+        data: LedgerEntry,
+        extraResponses: {
+            404: {description: 'Not found', schema: ErrorResponse},
+            200: {description: 'Idempotency key replayed', schema: envelope(LedgerEntry)},
+            409: {
+                description:
+                    'Already reversed, a reversal, or a sale/return entry (correct those with a sales return)',
+                schema: ErrorResponse,
+            },
+        },
+    },
+);
 
 // POS held bills: drafts, never sales. They post no stock, order, wallet or revenue.
 const pos = (m: Method, path: string, summary: string, rest: Partial<Op>) =>
@@ -737,7 +984,7 @@ pos(
 pos(
     'post',
     '/pos/sales',
-    'Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs a customer and pos.credit',
+    'Complete a sale atomically: invoice, line snapshots, payments, SALE stock movements and any credit entry. Payments must add up to the payable total exactly; CREDIT needs an active customer and pos.credit, and going over their credit limit needs overrideCreditLimit with pos.credit.override',
     {
         body: saleValidation.completeSaleSchema,
         status: 201,
@@ -745,6 +992,11 @@ pos(
         extraResponses: {
             ...notFound,
             200: {description: 'Idempotency key replayed: the same sale', schema: envelope(Sale)},
+            409: {
+                description:
+                    'Over the credit limit: errors[0] has outstanding, creditLimit and available',
+                schema: ErrorResponse,
+            },
         },
     },
 );

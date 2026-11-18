@@ -4,7 +4,7 @@ import {api, bearer, createOwner, uniqueName, uniquePhone} from './helpers';
 const URL = '/api/v1/customers';
 
 describe('customers', () => {
-    it('creates, searches by name or phone, and rejects a duplicate phone', async () => {
+    it('creates, searches by name or phone, and shares a phone only when asked', async () => {
         const {token} = await createOwner();
         const name = uniqueName('Cust');
         const phoneNumber = uniquePhone();
@@ -19,7 +19,20 @@ describe('customers', () => {
             const res = await api.get(`${URL}?q=${q}`).set(bearer(token)).expect(200);
             expect(res.body.data).toEqual([created.body.data]);
         }
-        await api.post(URL).set(bearer(token)).send({name: 'Other', phoneNumber}).expect(409);
+        // A family phone: another name needs sharedPhone; the same name never.
+        const clash = await api.post(URL).set(bearer(token)).send({name: 'Other', phoneNumber});
+        expect(clash.status).toBe(409);
+        expect(clash.body.errors[0].customers).toEqual([{id: created.body.data.id, name}]);
+        await api
+            .post(URL)
+            .set(bearer(token))
+            .send({name: 'Other', phoneNumber, sharedPhone: true})
+            .expect(201);
+        await api
+            .post(URL)
+            .set(bearer(token))
+            .send({name: name.toUpperCase(), phoneNumber, sharedPhone: true})
+            .expect(409);
         await api.post(URL).set(bearer(token)).send({name: 'Bad', phoneNumber: '123'}).expect(400);
     });
 

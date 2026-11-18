@@ -77,6 +77,7 @@ class BusinessService {
                 gstScheme: true,
                 roundOff: true,
                 invoicePrefix: true,
+                upiId: true,
                 createdAt: true,
                 stores: {
                     select: {id: true, name: true, address: true, isDefault: true},

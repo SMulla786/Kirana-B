@@ -12,7 +12,7 @@ Each phase runs in a fresh Claude Code chat, using that phase's prompt from
 | 2   | Catalogue, units, barcodes, stock ledger                                                   | 1A (1B for screens)         | ✅ Done 2026-11-16: backend `ff72475`+fixes, web `aa7e8e4`; live-passed, merged and pushed |
 | 3   | POS (web first, A-023): search, scanning, cart, held bills                                 | 1B, 2                       | ✅ Done 2026-11-18, pushed (Kirana-B `e3aec03`, kirana-F `5799510`): review #1–#6 and live-pass D1–D7 fixed, tests and live re-pass green |
 | 4   | Checkout, payments, invoices, receipt printing, returns                                    | 3; O-8, O-10                | ✅ Done 2026-11-18, pushed (Kirana-B `0763a4a`, kirana-F `5ca992d`): live-pass D1–D6 fixed, tests green; A-030 defaults await the owner (O-8, O-10, O-11) |
-| 5   | Customers and udhaar ledger                                                                | 4                           | Not started            |
+| 5   | Customers and udhaar ledger                                                                | 4                           | 🟡 In progress 2026-11-18: contract on `phase5/customers` (A-031) |
 | 6   | Suppliers, purchasing, goods receiving, stock operations                                   | 2, 4                        | Not started            |
 | 7   | Web owner portal, finance, shifts, reports, administration                                 | 4–6                         | Not started            |
 | 8   | Android (`Kirana-app`): owner, cashier, inventory                                                    | Stable APIs from 2–7; O-3   | Not started            |

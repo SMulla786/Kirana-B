@@ -30,6 +30,8 @@ const completeSaleSchema = checkoutSchema
     .extend({
         payments: z.array(paymentSchema).min(1).max(6),
         note: z.string().trim().max(120).optional(),
+        /** Complete a credit sale beyond the customer's credit limit. Needs pos.credit.override. */
+        overrideCreditLimit: z.boolean().optional(),
         idempotencyKey: key,
     })
     .strict();

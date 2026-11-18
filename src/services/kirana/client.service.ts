@@ -31,10 +31,29 @@ class clientService {
             take: 20,
         });
     }
-    // A duplicate phone in the business hits the unique index and maps to 409.
-    public createCustomer(kiranaId: string, data: {name: string; phoneNumber: string}) {
+    /**
+     * A family may share one phone (A-031): the same name on a phone is refused, and a second name on a
+     * phone already in use needs `sharedPhone: true`. The 409 lists the customers on that phone.
+     */
+    public async createCustomer(
+        kiranaId: string,
+        data: {name: string; phoneNumber: string; sharedPhone?: boolean},
+    ) {
+        const onPhone = await prisma.client.findMany({
+            where: {kiranaId, phoneNumber: data.phoneNumber},
+            select: {id: true, name: true},
+        });
+        const clash = (message: string) =>
+            new ApiError(409, message, [{field: 'phoneNumber', message, customers: onPhone}]);
+        const name = data.name.toLowerCase();
+        if (onPhone.some((c) => c.name.trim().toLowerCase() === name)) {
+            throw clash('A customer with this name already uses this phone');
+        }
+        if (onPhone.length && !data.sharedPhone) {
+            throw clash('This phone belongs to another customer; confirm it is a shared phone');
+        }
         return prisma.client.create({
-            data: {...data, address: '', kiranaId},
+            data: {name: data.name, phoneNumber: data.phoneNumber, address: '', kiranaId},
             select: {id: true, name: true, phoneNumber: true},
         });
     }

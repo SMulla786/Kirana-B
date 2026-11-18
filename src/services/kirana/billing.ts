@@ -48,8 +48,28 @@ export function applyRoundOff(rule: RoundOffRule, amount: Decimal) {
 }
 
 /**
+ * Locks the customer's balance row until the caller's transaction ends (creating it at 0) and returns
+ * the balance. Take it before deciding anything from the balance (credit limit, opening balance), then
+ * post with applyCustomerEntry. Lock order everywhere: document series, sale rows (by id), stock rows
+ * (by product id), customer balance.
+ */
+export async function lockCustomerBalance(
+    tx: Prisma.TransactionClient,
+    kiranaId: string,
+    customerId: string,
+): Promise<Decimal> {
+    const [row] = await tx.$queryRaw<{balance: Decimal}[]>`
+        INSERT INTO "CustomerBalance" ("id", "kiranaId", "customerId", "balance", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${kiranaId}, ${customerId}, 0, now())
+        ON CONFLICT ("customerId") DO UPDATE SET "balance" = "CustomerBalance"."balance"
+        RETURNING "balance"`;
+    return new Prisma.Decimal(row.balance);
+}
+
+/**
  * Appends one customer-account entry inside `tx` and moves the running balance by the same amount
  * (signed: + the customer owes more). The balance upsert takes the row lock first, as applyMovement does.
+ * Entries are never updated or deleted: a mistake is undone by a REVERSAL entry (A-031).
  */
 export async function applyCustomerEntry(
     tx: Prisma.TransactionClient,
@@ -61,6 +81,10 @@ export async function applyCustomerEntry(
         amount: Decimal;
         saleId?: string;
         saleReturnId?: string;
+        paymentId?: string;
+        reversesId?: string;
+        reason?: string;
+        idempotencyKey?: string;
     },
 ) {
     const balance = await tx.customerBalance.upsert({
@@ -79,6 +103,10 @@ export async function applyCustomerEntry(
             balanceAfter: balance.balance,
             saleId: entry.saleId ?? null,
             saleReturnId: entry.saleReturnId ?? null,
+            paymentId: entry.paymentId ?? null,
+            reversesId: entry.reversesId ?? null,
+            reason: entry.reason ?? null,
+            idempotencyKey: entry.idempotencyKey ?? null,
         },
     });
 }

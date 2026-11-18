@@ -95,6 +95,7 @@ model User {
   sales                  Sale[]
   saleReturns            SaleReturn[]
   customerEntries        CustomerLedgerEntry[]
+  customerPayments       CustomerPayment[]
 }
 
 /// One login session per device. The refresh token is opaque; only its SHA-256 hash is stored.
@@ -134,20 +135,21 @@ model Membership {
 
 /// A physical shop. MVP: exactly one default store per business, created with it.
 model Store {
-  id             String           @id @default(uuid())
-  kiranaId       String
-  name           String
-  address        String?
-  isDefault      Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  kirana         kirana           @relation(fields: [kiranaId], references: [id])
-  stockMovements StockMovement[]
-  stockBalances  StockBalance[]
-  heldBills      HeldBill[]
-  sales          Sale[]
-  saleReturns    SaleReturn[]
-  series         DocumentSeries[]
+  id               String            @id @default(uuid())
+  kiranaId         String
+  name             String
+  address          String?
+  isDefault        Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  kirana           kirana            @relation(fields: [kiranaId], references: [id])
+  stockMovements   StockMovement[]
+  stockBalances    StockBalance[]
+  heldBills        HeldBill[]
+  sales            Sale[]
+  saleReturns      SaleReturn[]
+  series           DocumentSeries[]
+  customerPayments CustomerPayment[]
 
   @@index([kiranaId])
 }
@@ -162,6 +164,7 @@ model kirana {
   gstScheme        GstScheme                @default(UNREGISTERED)
   roundOff         RoundOffRule             @default(NEAREST_1)
   invoicePrefix    String                   @default("INV")
+  upiId            String? // the shop's UPI ID (VPA) for the static checkout QR (O-10)
   amount           Decimal                  @default(0)
   renewalAmount    Decimal                  @default(0)
   // languageId       String
@@ -182,6 +185,7 @@ model kirana {
   saleReturns      SaleReturn[]
   customerEntries  CustomerLedgerEntry[]
   customerBalances CustomerBalance[]
+  customerPayments CustomerPayment[]
 }
 
 model employee {
@@ -389,8 +393,15 @@ model client {
   sales               Sale[]
   ledgerEntries       CustomerLedgerEntry[]
   balance             CustomerBalance?
+  // Phase 5 (A-031). A phone may be shared by a family, so it is not unique; the service refuses
+  // the same name on the same phone and asks before adding a second name to one.
+  notes               String?
+  tags                String[]              @default([])
+  creditLimit         Decimal?              @db.Decimal(14, 2) // null: no limit
+  isActive            Boolean               @default(true) // archived customers take no new bills
+  payments            CustomerPayment[]
 
-  @@unique([kiranaId, phoneNumber])
+  @@index([kiranaId, phoneNumber])
 }
 
 model order {
@@ -530,6 +541,7 @@ enum PaymentStatus {
 enum DocumentKind {
   INVOICE
   CREDIT_NOTE
+  PAYMENT_RECEIPT // a customer collection: RCPT/26-27/00001
 }
 
 enum ReturnDisposition {
@@ -540,6 +552,10 @@ enum ReturnDisposition {
 enum CustomerEntryType {
   CREDIT_SALE // + the customer owes more
   RETURN_CREDIT // - a return refunded to the customer's account
+  OPENING_BALANCE // +/- carried over from the shop's old book, once per customer
+  PAYMENT // - a collection (CustomerPayment)
+  ADJUSTMENT // +/- an approved correction, with a reason
+  REVERSAL // the exact opposite of one earlier entry, with a reason
 }
 
 /// Gapless numbers per store, document kind and financial year (April-March, IST). The counter row is
@@ -558,7 +574,7 @@ model DocumentSeries {
 
 /// A completed sale (the invoice). Immutable: returns are separate records and never change it.
 model Sale {
-  id             String                @id @default(uuid())
+  id             String                      @id @default(uuid())
   kiranaId       String
   storeId        String
   invoiceNo      String
@@ -571,25 +587,26 @@ model Sale {
   sellerName     String
   sellerAddress  String?
   sellerGstin    String?
-  subtotal       Decimal               @db.Decimal(14, 2) // sum of line gross
-  discountTotal  Decimal               @db.Decimal(14, 2)
-  taxableTotal   Decimal               @db.Decimal(14, 2)
-  cgstTotal      Decimal               @db.Decimal(14, 2)
-  sgstTotal      Decimal               @db.Decimal(14, 2)
-  roundOff       Decimal               @db.Decimal(14, 2)
-  total          Decimal               @db.Decimal(14, 2) // payable
-  changeDue      Decimal               @db.Decimal(14, 2) // cash handed back
+  subtotal       Decimal                     @db.Decimal(14, 2) // sum of line gross
+  discountTotal  Decimal                     @db.Decimal(14, 2)
+  taxableTotal   Decimal                     @db.Decimal(14, 2)
+  cgstTotal      Decimal                     @db.Decimal(14, 2)
+  sgstTotal      Decimal                     @db.Decimal(14, 2)
+  roundOff       Decimal                     @db.Decimal(14, 2)
+  total          Decimal                     @db.Decimal(14, 2) // payable
+  changeDue      Decimal                     @db.Decimal(14, 2) // cash handed back
   note           String?
   idempotencyKey String
-  createdAt      DateTime              @default(now())
-  kirana         kirana                @relation(fields: [kiranaId], references: [id])
-  store          Store                 @relation(fields: [storeId], references: [id])
-  customer       client?               @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  cashier        User                  @relation(fields: [cashierId], references: [id])
+  createdAt      DateTime                    @default(now())
+  kirana         kirana                      @relation(fields: [kiranaId], references: [id])
+  store          Store                       @relation(fields: [storeId], references: [id])
+  customer       client?                     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  cashier        User                        @relation(fields: [cashierId], references: [id])
   lines          SaleLine[]
   payments       SalePayment[]
   returns        SaleReturn[]
   ledgerEntries  CustomerLedgerEntry[]
+  allocations    CustomerPaymentAllocation[]
 
   @@unique([kiranaId, idempotencyKey])
   @@unique([storeId, invoiceNo])
@@ -689,23 +706,76 @@ model SaleReturnLine {
 
 /// Append-only customer account (udhaar). Phase 5 adds payments received, statements and limits.
 model CustomerLedgerEntry {
-  id           String            @id @default(uuid())
-  kiranaId     String
-  customerId   String
-  type         CustomerEntryType
-  amount       Decimal           @db.Decimal(14, 2) // signed: + the customer owes more
-  balanceAfter Decimal           @db.Decimal(14, 2)
-  saleId       String?
-  saleReturnId String?
-  actorId      String
-  createdAt    DateTime          @default(now())
-  kirana       kirana            @relation(fields: [kiranaId], references: [id])
-  customer     client            @relation(fields: [customerId], references: [id])
-  sale         Sale?             @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  saleReturn   SaleReturn?       @relation(fields: [saleReturnId], references: [id], onDelete: Restrict)
-  actor        User              @relation(fields: [actorId], references: [id])
+  id             String               @id @default(uuid())
+  kiranaId       String
+  customerId     String
+  type           CustomerEntryType
+  amount         Decimal              @db.Decimal(14, 2) // signed: + the customer owes more
+  balanceAfter   Decimal              @db.Decimal(14, 2)
+  saleId         String?
+  saleReturnId   String?
+  paymentId      String?
+  reversesId     String?              @unique // a REVERSAL points at the entry it cancels; once only
+  reason         String? // required for OPENING_BALANCE, ADJUSTMENT, REVERSAL and an over-limit sale
+  idempotencyKey String? // for entries posted directly (opening, adjustment, reversal)
+  actorId        String
+  createdAt      DateTime             @default(now())
+  kirana         kirana               @relation(fields: [kiranaId], references: [id])
+  customer       client               @relation(fields: [customerId], references: [id])
+  sale           Sale?                @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  saleReturn     SaleReturn?          @relation(fields: [saleReturnId], references: [id], onDelete: Restrict)
+  payment        CustomerPayment?     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  reverses       CustomerLedgerEntry? @relation("Reversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  reversedBy     CustomerLedgerEntry? @relation("Reversal")
+  actor          User                 @relation(fields: [actorId], references: [id])
 
+  @@unique([kiranaId, idempotencyKey])
   @@index([kiranaId, customerId, createdAt])
+  @@index([paymentId])
+}
+
+/// A collection from a customer (udhaar paid back). Immutable: a mistake is undone by reversing its
+/// PAYMENT ledger entry, after which its allocations no longer count against invoice dues.
+model CustomerPayment {
+  id             String                      @id @default(uuid())
+  kiranaId       String
+  storeId        String
+  customerId     String
+  receiptNo      String // RCPT/26-27/00001
+  financialYear  String
+  sequence       Int
+  method         PaymentMethod // never CREDIT
+  amount         Decimal                     @db.Decimal(14, 2)
+  reference      String? // UPI ref, cheque or bank reference, as typed
+  receivedOn     DateTime                    @db.Date // the IST day the money came in
+  note           String?
+  status         PaymentStatus               @default(RECORDED)
+  idempotencyKey String
+  createdById    String
+  createdAt      DateTime                    @default(now())
+  kirana         kirana                      @relation(fields: [kiranaId], references: [id])
+  store          Store                       @relation(fields: [storeId], references: [id])
+  customer       client                      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy      User                        @relation(fields: [createdById], references: [id])
+  allocations    CustomerPaymentAllocation[]
+  ledgerEntries  CustomerLedgerEntry[]
+
+  @@unique([kiranaId, idempotencyKey])
+  @@unique([storeId, receiptNo])
+  @@index([kiranaId, customerId, createdAt])
+}
+
+/// The part of a collection set against one credit invoice. What is left unallocated is on account.
+model CustomerPaymentAllocation {
+  id        String          @id @default(uuid())
+  paymentId String
+  saleId    String
+  amount    Decimal         @db.Decimal(14, 2)
+  payment   CustomerPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  sale      Sale            @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, saleId])
+  @@index([saleId])
 }
 
 /// Running balance per customer, moved only together with a CustomerLedgerEntry (row-locked upsert).
