@@ -1,9 +1,9 @@
 # Project state
 
-_Last updated 2026-11-18 · **Phase 4 (checkout, payments, invoices, receipts, returns) is built on branches**
-Kirana-B `phase4/sales` and kirana-F `phase4/web`, tests green, live pass running; not merged or pushed.
-Phases 1–3 are pushed (`main`: Kirana-B `e3aec03`, kirana-F `5799510`, Kirana-desktop `766dece`). The desktop
-shell (Tauri, A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
+_Last updated 2026-11-18 · **Phase 4 (checkout, payments, invoices, receipts, returns) is done, merged and
+pushed** (`main`: Kirana-B, kirana-F `5ca992d`), with the live-pass fixes D1–D6. Its defaults (A-030) await the
+owner's confirmation. Kirana-desktop `main` is `766dece`. The desktop shell (Tauri, A-026/A-029) wraps kirana-F
+and has never been compiled. Next: see the bottom_
 
 ## Phase 4: what was built (2026-11-18)
 
@@ -11,7 +11,7 @@ The model is DECISIONS A-030. Built by three sessions in parallel against one co
 (`fbebf83`): the sale core (kirana-6b), sales history and returns (kirana-ca, merged from `phase4/returns`)
 and the web screens (kirana-44, `phase4/web`).
 
-**Kirana-B `phase4/sales`** (on `main` `e3aec03`):
+**Kirana-B `phase4/sales`** (fast-forwarded onto `main` at `8ebbd9f`):
 - **Schema** (migration `20261118160000_phase4_sales`): `Sale`, `SaleLine`, `SalePayment`, `SaleReturn`,
   `SaleReturnLine`, `CustomerLedgerEntry`, `CustomerBalance`, `DocumentSeries`; enums `GstScheme`,
   `RoundOffRule`, `PaymentMethod`, `PaymentStatus`, `DocumentKind`, `ReturnDisposition`,
@@ -39,7 +39,7 @@ and the web screens (kirana-44, `phase4/web`).
   - A return restocks at the sale line's snapshot factor (a later pack-size change doesn't alter it).
 - **Also on this branch:** vitest `testTimeout` 30 s (DB-backed tests timed out at 5 s under load).
 
-**kirana-F `phase4/web`** (on `main` `5799510`; kirana-44):
+**kirana-F `phase4/web`** (fast-forwarded onto `main` at `5ca992d`; kirana-44):
 - **Checkout (F10 / button):** opens on the server preview; tax rows only for REGULAR; split payment rows
   prefilled with the remaining balance; cash tendered and change; UPI labelled "Recorded by cashier · not
   bank-confirmed"; Credit only with `pos.credit` and a customer; Complete only when the rows add up
@@ -57,7 +57,11 @@ and the web screens (kirana-44, `phase4/web`).
 | Kirana-B | `npx tsc --noEmit`, `-p tsconfig.test.json`, `npm run lint` | ✅ clean (`e29ba5f`)        |
 | Kirana-B | `npm test` (`kirana_test`)                               | ✅ 15 files, 154 passed (`e29ba5f`) |
 | kirana-F | tsc, prettier, `vitest run`, build (reported by kirana-44) | ✅ 29 files, 175 passed (`3878553`) |
-| Live     | Browser + API pass on `kirana_p4live_test` (kirana-44), Kirana-B `e29ba5f` + kirana-F `3878553` | ✅ backend: stock refs, one invoice per retry/double-click/concurrent post, gapless INV 1..17 and CN 1..5, cashier limits, all three GST schemes, returns incl. damaged on negative stock. ❌ web: D1 reprint prints 3 pages, D2 GSTIN can't be cleared; low D3–D6 → being fixed on `phase4/web` |
+| Kirana-B | tsc (both configs), lint, `npm test` on merged `main`   | ❌ 153/154 at `8ebbd9f`: `returns.test.ts` "splits one line…" assumed request order for two parts of one sale line, which come back in a stable id order → test pairs amounts by quantity (`0763a4a`) |
+| Kirana-B | same, after the fix                                      | ✅ 15 files, 154 passed (`0763a4a`); returns file 4/4 runs |
+| kirana-F | `api:types` (no change), prettier, `npm test`, `npm run build` on merged `main` | ✅ 181 passed, build OK (`5ca992d`) |
+| Live     | Browser + API pass on `kirana_p4live_test` (kirana-44), Kirana-B `e29ba5f` + kirana-F `3878553` | ✅ backend: stock refs, one invoice per retry/double-click/concurrent post, gapless INV 1..17 and CN 1..5, cashier limits, all three GST schemes, returns incl. damaged on negative stock. ❌ web: D1 reprint prints 3 pages, D2 GSTIN can't be cleared; low D3–D6 → fixed in kirana-F `5ca992d` |
+| Live     | D1 recheck (kirana-44): headless Chrome `printToPDF` on the live app, kirana-F `5ca992d` | ✅ reprint from sale detail 80 mm 3 → 1 page, A4 2 → 1; after-sale receipt still 1 page; white, no grey fill. D2–D6 are covered by new tests (GSTIN cleared with `null` and a REGULAR 400 shown inline; 409 reloads limits; CN tax columns; signed round-off) |
 
 ## Phase 3: what was built (2026-11-16)
 
@@ -276,8 +280,8 @@ the first build.
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main` `e3aec03` = `origin/main` (Phase 3 pushed); local `phase4/sales` | Backend API + project memory                       |
-| `kirana/kirana-F/`       | `main` `5799510` = `origin/main` (Phase 3 pushed); local `phase4/web`  | Web admin + desktop UI (React 19 + TS + Vite)      |
+| `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 4 pushed 2026-11-18)                  | Backend API + project memory                       |
+| `kirana/kirana-F/`       | `main` `5ca992d` = `origin/main` (Phase 4 pushed 2026-11-18)        | Web admin + desktop UI (React 19 + TS + Vite)      |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
 | `kirana/Kirana-desktop/` | `main` `766dece` = `origin/main` (first push 2026-11-18)            | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
@@ -420,7 +424,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
 | POS (web): cart, scan, held bills | ✅ | Phase 3 merged locally and live-passed; push pending                               |
-| Checkout, invoices, returns | 🟡    | Phase 4 built on branches (A-030); live pass and merge pending                               |
+| Checkout, invoices, returns | ✅    | Phase 4 (A-030), live pass green after D1–D6; defaults await the owner (O-8, O-10, O-11)     |
 | Udhaar, purchasing         | ⚠️/❌  | Credit sales post a customer ledger (Phase 4); statements, collections, purchasing → Phases 5–6. Old order/wallet tables stay unrouted (P-011) |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
@@ -547,13 +551,13 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 1. **Owner:**
    - Make Kirana-B private, if that's still the plan; it was public at the last check.
    - Archive or delete `kirana-backend`.
-   - Back up `prisma/migrations/`, which now has 11 migrations.
+   - Back up `prisma/migrations/`, which now has 12 migrations (incl. `20261118160000_phase4_sales`).
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
    - Confirm the Phase 4 defaults (A-030) and settle O-8 (GST, with a CA), O-10 (UPI gateway) and O-11.
-2. **Phase 4 finish:** record kirana-44's live pass, fix what it finds, merge `phase4/sales` and
-   `phase4/web` into `main`, and push with the owner's OK (CI green). The desktop app has never compiled:
-   installing Rust + MSVC is the owner's decision.
+2. **Phase 4 is done** (2026-11-18): merged and pushed. The desktop app has never compiled: installing
+   Rust + MSVC is the owner's decision. The throwaway DBs `kirana_live_test` and `kirana_p4live_test` are
+   the owner's to drop or keep.
 3. **Then, in a fresh chat:** Phase 5 (customers, udhaar and the customer ledger), building on
    `CustomerLedgerEntry`/`CustomerBalance` and `applyCustomerEntry` from Phase 4.
