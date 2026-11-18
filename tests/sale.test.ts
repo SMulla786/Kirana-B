@@ -131,6 +131,7 @@ describe('checkout and sales', () => {
         const {token} = await createOwner();
         await settings(token, {gstScheme: 'REGULAR'}).expect(400); // no GSTIN yet
         await settings(token, {gstin: GSTIN, gstScheme: 'REGULAR', roundOff: 'NONE'}).expect(200);
+        await settings(token, {gstin: null}).expect(400); // can't clear it under REGULAR
         const inclusive = await product(token, {sellingPrice: '105.00', gstRate: 5});
         const exclusive = await product(token, {
             sellingPrice: '100.00',

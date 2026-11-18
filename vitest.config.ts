@@ -20,5 +20,7 @@ export default defineConfig({
         env: testEnv,
         globalSetup: ['tests/global-setup.ts'],
         fileParallelism: false, // all files share one test DB
+        // Integration tests hash passwords and hit a real DB; 5 s fails on a busy PC or CI runner.
+        testTimeout: 20_000,
     },
 });

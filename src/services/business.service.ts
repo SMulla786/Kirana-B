@@ -89,16 +89,18 @@ class BusinessService {
     }
 
     public async updateBusiness(kiranaId: string, data: UpdateBusiness) {
-        // A tax or composition bill must carry the seller's GSTIN (A-030).
-        if (data.gstScheme && data.gstScheme !== 'UNREGISTERED' && data.gstin === undefined) {
-            const {gstin} = await prisma.kirana.findUniqueOrThrow({
+        // A tax or composition bill must carry the seller's GSTIN (A-030), so check the result of the
+        // update: setting a scheme without a GSTIN, or clearing the GSTIN under a scheme, is refused.
+        if (data.gstScheme !== undefined || data.gstin !== undefined) {
+            const now = await prisma.kirana.findUniqueOrThrow({
                 where: {id: kiranaId},
-                select: {gstin: true},
+                select: {gstin: true, gstScheme: true},
             });
-            if (!gstin)
+            const scheme = data.gstScheme ?? now.gstScheme;
+            const gstin = data.gstin !== undefined ? data.gstin : now.gstin;
+            if (scheme !== 'UNREGISTERED' && !gstin) {
                 throw new ApiError(httpStatus.BAD_REQUEST, 'Set the GSTIN for this GST scheme');
-        } else if (data.gstScheme && data.gstScheme !== 'UNREGISTERED' && !data.gstin) {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'Set the GSTIN for this GST scheme');
+            }
         }
         await prisma.kirana.update({where: {id: kiranaId}, data});
         return this.getBusiness(kiranaId);
