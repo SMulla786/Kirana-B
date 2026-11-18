@@ -9,5 +9,6 @@ router.use(verifyJWT, requirePermission('pos.use'));
 router.get('/held', c.list);
 router.post('/held', c.hold);
 router.post('/held/:id/recall', c.recall);
+router.delete('/held/:id', c.confirm);
 
 export default router;

@@ -239,9 +239,16 @@ const HeldBill = z
                 unit: unitCode,
                 factor: z.string().openapi({description: 'Base units in one of this unit'}),
                 quantity: qty.openapi({description: 'In the selected unit'}),
-                unitPrice: money.openapi({description: 'Per selected unit, snapshotted'}),
+                unitPrice: money.openapi({
+                    description:
+                        'Per selected unit, for display (rounded; gross is not built from it)',
+                }),
+                gross: money.openapi({
+                    description:
+                        'Catalogue: round2(quantity x factor x sellingPrice / salesFactor). Overridden: round2(quantity x unitPrice)',
+                }),
                 discount: money,
-                lineTotal: money.openapi({description: 'round2(quantity x unitPrice) - discount'}),
+                lineTotal: money.openapi({description: 'gross - discount'}),
                 priceOverridden: z.boolean().openapi({
                     description:
                         'The stored unitPrice differed from the catalogue price at hold time',
@@ -542,12 +549,27 @@ pos(
     'post',
     '/pos/held',
     'Hold a bill. The price is snapshotted by the server; a discount needs pos.discount and a different price needs pos.price.override',
-    {body: posValidation.holdBillSchema, status: 201, data: HeldBill, extraResponses: notFound},
+    {
+        body: posValidation.holdBillSchema,
+        status: 201,
+        data: HeldBill,
+        extraResponses: {
+            ...notFound,
+            200: {description: 'Idempotency key replayed', schema: envelope(HeldBill)},
+        },
+    },
 );
-pos('post', '/pos/held/{id}/recall', 'Recall a held bill; it is deleted in the same step', {
+pos(
+    'post',
+    '/pos/held/{id}/recall',
+    'Claim a held bill for this till (2 min). Repeat with the same claimKey to retry; another key gets 404 while the claim is live',
+    {params: idParams, body: posValidation.claimSchema, data: HeldBill, extraResponses: notFound},
+);
+pos('delete', '/pos/held/{id}', 'Confirm a recall: delete the draft claimed with claimKey', {
     params: idParams,
-    data: HeldBill,
-    extraResponses: notFound,
+    query: posValidation.claimSchema,
+    status: 204,
+    extraResponses: {409: {description: 'Another till holds the claim', schema: ErrorResponse}},
 });
 
 // Platform admin (role ADMIN, no tenant permission)

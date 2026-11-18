@@ -27,12 +27,20 @@ export default {
     }),
     hold: catchAsync(async (req, res) => {
         const input = posValidation.holdBillSchema.parse(req.body);
-        const bill = await heldBillService.hold(posContext(req), input);
-        res.status(httpStatus.CREATED).json(new ApiResponse(httpStatus.CREATED, bill, 'Bill held'));
+        const {bill, created} = await heldBillService.hold(posContext(req), input);
+        const status = created ? httpStatus.CREATED : httpStatus.OK;
+        res.status(status).json(new ApiResponse(status, bill, 'Bill held'));
     }),
     recall: catchAsync(async (req, res) => {
         const id = commonValidation.idSchema.parse(req.params.id);
-        const bill = await heldBillService.recall(catalogContext(req), id);
+        const {claimKey} = posValidation.claimSchema.parse(req.body);
+        const bill = await heldBillService.recall(catalogContext(req), id, claimKey);
         res.json(new ApiResponse(httpStatus.OK, bill, 'Held bill recalled'));
+    }),
+    confirm: catchAsync(async (req, res) => {
+        const id = commonValidation.idSchema.parse(req.params.id);
+        const {claimKey} = posValidation.claimSchema.parse(req.query);
+        await heldBillService.confirm(catalogContext(req), id, claimKey);
+        res.status(httpStatus.NO_CONTENT).end();
     }),
 };

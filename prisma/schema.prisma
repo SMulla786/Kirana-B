@@ -463,10 +463,16 @@ model HeldBill {
   note        String?
   lines       Json
   createdAt   DateTime @default(now())
+  /// Makes a retried hold return the first bill instead of a duplicate.
+  idempotencyKey String?
+  /// Recall claims the bill for one till; the till deletes it once it is in its cart.
+  claimKey    String?
+  claimedAt   DateTime?
   kirana      kirana   @relation(fields: [kiranaId], references: [id])
   store       Store    @relation(fields: [storeId], references: [id])
   createdBy   User     @relation(fields: [createdById], references: [id])
   customer    client?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
+  @@unique([kiranaId, idempotencyKey])
   @@index([kiranaId, storeId, createdAt])
 }

@@ -15,6 +15,10 @@ const createProduct = async (token: string, overrides: Body = {}) => {
 };
 
 const hold = (token: string, body: Body) => api.post(HELD).set(bearer(token)).send(body);
+const recall = (token: string, id: string, claimKey = 'till-A-key') =>
+    api.post(`${HELD}/${id}/recall`).set(bearer(token)).send({claimKey});
+const confirm = (token: string, id: string, claimKey = 'till-A-key') =>
+    api.delete(`${HELD}/${id}`).query({claimKey}).set(bearer(token));
 const line = (productId: string, extra: Body = {}) => ({
     productId,
     unit: 'PIECE',
@@ -23,7 +27,7 @@ const line = (productId: string, extra: Body = {}) => ({
 });
 
 describe('held bills', () => {
-    it('holds, lists and recalls once; the second recall is 404', async () => {
+    it('holds, lists, claims and confirms; another till gets 404 while claimed', async () => {
         const {token} = await createOwner();
         const p = await createProduct(token);
         const customer = await api
@@ -68,10 +72,71 @@ describe('held bills', () => {
             }),
         ]);
 
-        const recalled = await api.post(`${HELD}/${id}/recall`).set(bearer(token)).expect(200);
+        const recalled = await recall(token, id).expect(200);
         expect(recalled.body.data).toEqual(held.body.data);
-        await api.post(`${HELD}/${id}/recall`).set(bearer(token)).expect(404);
+        // A lost response is retried with the same key; another till is refused and can't see it.
+        await recall(token, id).expect(200);
+        await recall(token, id, 'till-B-key').expect(404);
         expect((await api.get(HELD).set(bearer(token))).body.data).toEqual([]);
+        await confirm(token, id).expect(204);
+        await confirm(token, id).expect(204);
+        await recall(token, id).expect(404);
+        await recall(token, id, 'short').expect(400);
+    });
+
+    it('lets another till take a lapsed claim, and tells the first till on confirm', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token);
+        const {id} = (await hold(token, {lines: [line(p.id)]}).expect(201)).body.data;
+        await recall(token, id).expect(200);
+        // The first till vanished: its claim is older than the 2 min TTL.
+        await prisma.heldBill.update({
+            where: {id},
+            data: {claimedAt: new Date(Date.now() - 3 * 60_000)},
+        });
+        expect((await api.get(HELD).set(bearer(token))).body.data).toHaveLength(1);
+        await recall(token, id, 'till-B-key').expect(200);
+        await confirm(token, id).expect(409);
+        await confirm(token, id, 'till-B-key').expect(204);
+    });
+
+    it('returns the first bill when a hold is retried with the same idempotencyKey', async () => {
+        const {token} = await createOwner();
+        const p = await createProduct(token);
+        const body = {idempotencyKey: uniqueName('hold'), lines: [line(p.id)]};
+        const first = await hold(token, body).expect(201);
+        const again = await hold(token, body).expect(200);
+        expect(again.body.data.id).toBe(first.body.data.id);
+        expect((await api.get(HELD).set(bearer(token))).body.data).toHaveLength(1);
+    });
+
+    it('never builds the gross from a rounded unit price', async () => {
+        const owner = await createOwner();
+        const cashier = await createMember(owner.token, 'CASHIER');
+        // ₹45 per kg on a gram base: 750 g is ₹33.75, whichever unit the cashier picks.
+        const p = await createProduct(owner.token, {
+            baseUnit: 'GRAM',
+            salesUnit: 'KILOGRAM',
+            sellingPrice: '45.00',
+        });
+        const inGrams = await hold(cashier.token, {
+            lines: [{productId: p.id, unit: 'GRAM', quantity: 750}],
+        }).expect(201);
+        const inKg = await hold(cashier.token, {
+            lines: [{productId: p.id, unit: 'KILOGRAM', quantity: '0.75'}],
+        }).expect(201);
+        for (const res of [inGrams, inKg]) {
+            expect(res.body.data).toMatchObject({subtotal: '33.75', total: '33.75'});
+        }
+        // The rounded per-gram price is display only, and sending it back is not an override.
+        expect(inGrams.body.data.lines[0]).toMatchObject({unitPrice: '0.05', gross: '33.75'});
+        const echoed = await hold(cashier.token, {
+            lines: [{productId: p.id, unit: 'GRAM', quantity: 750, unitPrice: '0.05'}],
+        }).expect(201);
+        expect(echoed.body.data.lines[0]).toMatchObject({gross: '33.75', priceOverridden: false});
+        await hold(owner.token, {
+            lines: [{productId: p.id, unit: 'GRAM', quantity: 750, discount: '33.76'}],
+        }).expect(400);
     });
 
     it('snapshots the server price per unit; a different client price needs permission', async () => {
@@ -124,10 +189,7 @@ describe('held bills', () => {
             .set(bearer(owner.token))
             .send({status: 'ARCHIVED'})
             .expect(200);
-        const recalled = await api
-            .post(`${HELD}/${over.body.data.id}/recall`)
-            .set(bearer(owner.token))
-            .expect(200);
+        const recalled = await recall(owner.token, over.body.data.id).expect(200);
         expect(recalled.body.data.lines[0]).toMatchObject({product: null, priceOverridden: true});
     });
 
@@ -228,7 +290,8 @@ describe('held bills', () => {
         });
         const before = await snapshot();
         const res = await hold(token, {customerId: customer.id, lines: [line(p.id)]}).expect(201);
-        await api.post(`${HELD}/${res.body.data.id}/recall`).set(bearer(token)).expect(200);
+        await recall(token, res.body.data.id).expect(200);
+        await confirm(token, res.body.data.id).expect(204);
         await hold(token, {customerId: customer.id, lines: [line(p.id)]}).expect(201);
         expect(await snapshot()).toEqual(before);
 
@@ -249,11 +312,13 @@ describe('held bills', () => {
         const held = await hold(a.token, {lines: [line(p.id)]}).expect(201);
 
         expect((await api.get(HELD).set(bearer(b.token)).expect(200)).body.data).toEqual([]);
-        await api.post(`${HELD}/${held.body.data.id}/recall`).set(bearer(b.token)).expect(404);
+        await recall(b.token, held.body.data.id).expect(404);
+        await confirm(b.token, held.body.data.id).expect(204); // nothing of B's to delete
+        expect(await prisma.heldBill.count({where: {id: held.body.data.id}})).toBe(1);
         await hold(b.token, {lines: [line(p.id)]}).expect(404);
         await hold(b.token, {customerId: customer.body.data.id, lines: [line(pb.id)]}).expect(404);
         // Still there for its owner.
-        await api.post(`${HELD}/${held.body.data.id}/recall`).set(bearer(a.token)).expect(200);
+        await recall(a.token, held.body.data.id).expect(200);
     });
 
     it('needs pos.use', async () => {

@@ -29,10 +29,16 @@ in the Tauri shell later. The model is in DECISIONS A-028.
   (`customers.manage`).
 - **Held bills:** a held bill is a draft. It never touches stock, orders, wallets or revenue (tested by
   snapshotting all four).
-- **Pricing:** the server snapshots the price per line from the sales-unit price. A different client price
-  gets 403 without `pos.price.override`; a discount gets 403 without `pos.discount`.
-- **Validation:** units, quantities and the discount cap are checked per line.
-- **Recall:** it deletes the draft in its transaction, so a second recall gets 404.
+- **Pricing:** the server computes each line's gross exactly from the sales-unit price, never from a
+  rounded unit price (review #3). A different client price gets 403 without `pos.price.override`; a
+  discount gets 403 without `pos.discount`.
+- **Validation:** units, quantities and the discount cap (≤ gross) are checked per line.
+- **Hold/recall (review #6):**
+  - A hold accepts an `idempotencyKey`; a retry returns the first bill with 200.
+  - Recall claims the bill with the till's `claimKey`. A retry with the same key succeeds, and another
+    till gets 404 until the 2 min claim lapses.
+  - `DELETE /pos/held/:id?claimKey=` confirms the recall, or gets 409 if another till took the lapsed
+    claim. Claimed bills are hidden from the list.
 
 **Web (`src/pages/pos/`):**
 - **Layout:** the header shows store, cashier and online/offline. The left rail has Favourites and the
@@ -62,7 +68,7 @@ in the Tauri shell later. The model is in DECISIONS A-028.
 | -------- | -------------------------------------------------------- | ------------------------------ |
 | Kirana-B | `npx tsc --noEmit`, `npx tsc --noEmit -p tsconfig.test.json` | ✅ 0 errors                 |
 | Kirana-B | `npm run lint`                                           | ✅ clean                        |
-| Kirana-B | `npx vitest run` (separate `kirana_p3_test` DB)          | ✅ 12 files, 128 passed         |
+| Kirana-B | `npx vitest run` (separate `kirana_p3_test` DB)          | ✅ 12 files, 132 passed (2026-11-18, after the review fixes) |
 | kirana-F | `npx tsc`, `npx prettier --check src`                    | ✅ clean                        |
 | kirana-F | `npx vitest run`                                         | ✅ 20 files, 109 passed (incl. POS perf: 500 adds + totals < 100 ms, 500 tiles) |
 | kirana-F | `npm run build`                                          | ✅                              |
@@ -283,7 +289,8 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 
 - **Phase 3:** `prisma/migrations/20261116200000_phase3_pos/`. It's additive only:
   - `KiranaMaterial."isFavourite" BOOLEAN NOT NULL DEFAULT false`;
-  - a `HeldBill` table, with an index on `(kiranaId, storeId, createdAt)`;
+  - a `HeldBill` table (with `idempotencyKey`, `claimKey` and `claimedAt`), with an index on
+    `(kiranaId, storeId, createdAt)` and a unique index on `(kiranaId, idempotencyKey)`;
   - FKs to kirana, Store and User (RESTRICT), and to client (SET NULL).
 
   It was generated with `prisma migrate diff`, so no DB was touched. It's in the branch worktree and **not
@@ -425,7 +432,8 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
    - **Weighed items and totals:** sell a loose gram product as 1.25 kg. Check that the totals are right
      after changing qty, unit and discount.
    - **Hold and recall:** hold (F8). The product's stock and movements are unchanged. Recall (F9) loads the
-     bill, and recalling it again from a second tab gives 404.
+     bill, and recalling it from a second tab within 2 min gives 404. 750 g of a ₹45/kg product bills
+     ₹33.75 whether it is entered in g or kg.
    - **Cashier:** the cashier sees no discount or price inputs. Re-holding an owner's discounted bill gives an
      inline 403, and the cart is kept.
    - **Keyboard and layout:** the keyboard alone (F2, arrows, Delete, +/-, F1 help) never leaves focus on

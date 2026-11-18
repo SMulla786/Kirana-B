@@ -61,7 +61,8 @@ Kirana-B/
 | GET / PATCH / DELETE | `/catalog/categories/:id`, `/catalog/products/:id`                          | catalog.read / catalog.manage    |
 | GET / POST           | `/customers` (`?q=` search, quick add; Phase 3 minimal)                     | customers.manage                 |
 | GET / POST           | `/pos/held` (list, hold a draft bill)                                       | pos.use (+ pos.discount / pos.price.override per line) |
-| POST                 | `/pos/held/:id/recall` (load + delete the draft)                            | pos.use                          |
+| POST                 | `/pos/held/:id/recall` (`{claimKey}`: claim the draft for this till, 2 min) | pos.use                          |
+| DELETE               | `/pos/held/:id?claimKey=` (confirm the recall; 409 if another till holds it) | pos.use                         |
 | GET                  | `/admin`                                                                    | platform ADMIN                   |
 | POST                 | `/admin/businesses`                                                         | platform ADMIN                   |
 

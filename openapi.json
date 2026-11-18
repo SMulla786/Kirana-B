@@ -1145,7 +1145,12 @@
                 },
                 "unitPrice": {
                   "type": "string",
-                  "description": "Per selected unit, snapshotted",
+                  "description": "Per selected unit, for display (rounded; gross is not built from it)",
+                  "example": "45.00"
+                },
+                "gross": {
+                  "type": "string",
+                  "description": "Catalogue: round2(quantity x factor x sellingPrice / salesFactor). Overridden: round2(quantity x unitPrice)",
                   "example": "45.00"
                 },
                 "discount": {
@@ -1155,7 +1160,7 @@
                 },
                 "lineTotal": {
                   "type": "string",
-                  "description": "round2(quantity x unitPrice) - discount",
+                  "description": "gross - discount",
                   "example": "45.00"
                 },
                 "priceOverridden": {
@@ -1171,6 +1176,7 @@
                 "factor",
                 "quantity",
                 "unitPrice",
+                "gross",
                 "discount",
                 "lineTotal",
                 "priceOverridden"
@@ -6137,6 +6143,11 @@
                     },
                     "minItems": 1,
                     "maxItems": 200
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
                   }
                 },
                 "required": [
@@ -6148,6 +6159,42 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Idempotency key replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/HeldBill"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
           "201": {
             "description": "Success",
             "content": {
@@ -6232,7 +6279,7 @@
         "tags": [
           "POS"
         ],
-        "summary": "Recall a held bill; it is deleted in the same step",
+        "summary": "Claim a held bill for this till (2 min). Repeat with the same claimKey to retry; another key gets 404 while the claim is live",
         "description": "Requires permission `pos.use`.",
         "security": [
           {
@@ -6253,6 +6300,27 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "claimKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "claimKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success",
@@ -6322,6 +6390,121 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pos/held/{id}": {
+      "delete": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Confirm a recall: delete the draft claimed with claimKey",
+        "description": "Requires permission `pos.use`.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            },
+            "required": true,
+            "name": "claimKey",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "status",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another till holds the claim",
             "content": {
               "application/json": {
                 "schema": {

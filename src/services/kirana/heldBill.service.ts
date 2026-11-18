@@ -29,12 +29,17 @@ type StoredLine = {
     factor: string;
     quantity: string;
     unitPrice: string;
+    gross?: string; // exact line amount; absent on drafts held before it existed
     discount: string;
     priceOverridden: boolean; // stored price differed from the catalogue price at hold time
 };
 
+/** A recall claim older than this lapses, so a bill whose till vanished shows up again. */
+export const CLAIM_TTL_MS = 120_000;
+const unclaimed = () => [{claimedAt: null}, {claimedAt: {lt: new Date(Date.now() - CLAIM_TTL_MS)}}];
+
 const lineAmounts = (l: StoredLine) => {
-    const gross = round2(D(l.quantity).mul(l.unitPrice));
+    const gross = l.gross ? D(l.gross) : round2(D(l.quantity).mul(l.unitPrice));
     return {gross, discount: D(l.discount), lineTotal: gross.sub(l.discount)};
 };
 
@@ -80,6 +85,7 @@ const serialize = async (
             product: byId.get(l.productId) ?? null,
             quantity: D(l.quantity).toFixed(3),
             unitPrice: D(l.unitPrice).toFixed(2),
+            gross: lineAmounts(l).gross.toFixed(2),
             discount: D(l.discount).toFixed(2),
             lineTotal: lineAmounts(l).lineTotal.toFixed(2),
         })),
@@ -93,7 +99,15 @@ const serialize = async (
 
 class HeldBillService {
     /** A draft only: it never touches stock, orders, wallets or revenue. */
+    /** Returns `created: false` when the idempotencyKey was already used: a retry, not a new bill. */
     async hold(ctx: PosContext, input: HoldInput) {
+        if (input.idempotencyKey) {
+            const prior = await prisma.heldBill.findFirst({
+                where: {kiranaId: ctx.kiranaId, idempotencyKey: input.idempotencyKey},
+                include,
+            });
+            if (prior) return {bill: await serialize(prior, ctx), created: false};
+        }
         const ids = [...new Set(input.lines.map((l) => l.productId))];
         const products = await prisma.kiranaMaterial.findMany({
             where: {id: {in: ids}, kiranaId: ctx.kiranaId, status: 'ACTIVE'},
@@ -124,23 +138,25 @@ class HeldBillService {
             if (!factor) return fail(400, `${l.unit} is not one of this product's units`);
             toBaseQuantity(l.quantity, factor, p.baseUnit); // throws 400 on bad precision/fraction
 
-            // sellingPrice is per sales unit, so scale it to the chosen unit through the base unit.
-            const catalogue =
-                p.sellingPrice === null
-                    ? null
-                    : round2(p.sellingPrice.mul(factor).div(factorOf(p.salesUnit) ?? 1));
-            const overridden = !!l.unitPrice && !(catalogue && l.unitPrice.equals(catalogue));
+            // sellingPrice is per sales unit. The gross is never built from a rounded unit price, or
+            // 750 g at ₹45/kg would bill ₹37.50 and picking a smaller unit would be a hidden discount.
+            const salesFactor = factorOf(p.salesUnit) ?? D(1);
+            const shown = p.sellingPrice && round2(p.sellingPrice.mul(factor).div(salesFactor)); // display only
+            const overridden = !!l.unitPrice && !(shown && l.unitPrice.equals(shown));
             if (overridden) {
                 if (!ctx.canOverridePrice) return fail(403, 'You cannot change the price');
-            } else if (!l.unitPrice && !catalogue) {
+            } else if (!shown) {
                 return fail(400, `"${p.name}" has no price; enter one`);
             }
-            const unitPrice = l.unitPrice ?? catalogue!;
+            const unitPrice = overridden ? l.unitPrice! : shown!;
+            const gross = round2(
+                overridden
+                    ? l.quantity.mul(unitPrice)
+                    : l.quantity.mul(factor).mul(p.sellingPrice!).div(salesFactor),
+            );
             const discount = l.discount ?? D(0);
             if (discount.gt(0) && !ctx.canDiscount) return fail(403, 'You cannot give a discount');
-            if (discount.gt(round2(l.quantity.mul(unitPrice)))) {
-                return fail(400, 'Discount cannot exceed the line amount');
-            }
+            if (discount.gt(gross)) return fail(400, 'Discount cannot exceed the line amount');
             return {
                 productId: p.id,
                 productName: p.name,
@@ -148,6 +164,7 @@ class HeldBillService {
                 factor: factor.toString(),
                 quantity: l.quantity.toFixed(3),
                 unitPrice: unitPrice.toFixed(2),
+                gross: gross.toFixed(2),
                 discount: discount.toFixed(2),
                 priceOverridden: overridden,
             };
@@ -161,15 +178,17 @@ class HeldBillService {
                 customerId: input.customerId ?? null,
                 note: input.note || null,
                 lines,
+                idempotencyKey: input.idempotencyKey ?? null,
             },
             include,
         });
-        return serialize(row, ctx);
+        return {bill: await serialize(row, ctx), created: true};
     }
 
+    /** Bills another till is loading right now (a live claim) are hidden. */
     async list(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>) {
         const rows = await prisma.heldBill.findMany({
-            where: {kiranaId: ctx.kiranaId, storeId: ctx.storeId},
+            where: {kiranaId: ctx.kiranaId, storeId: ctx.storeId, OR: unclaimed()},
             include,
             orderBy: {createdAt: 'desc'},
             take: 200,
@@ -188,15 +207,31 @@ class HeldBillService {
         });
     }
 
-    /** Loads the draft and deletes it atomically, so two tills cannot both recall it. */
-    recall(ctx: Pick<PosContext, 'kiranaId' | 'storeId' | 'canSeeCost'>, id: string) {
+    /**
+     * Claims the draft for this till, without deleting it, so a lost response can be retried with the
+     * same claimKey. One conditional update is atomic, so two tills cannot both claim it.
+     */
+    async recall(
+        ctx: Pick<PosContext, 'kiranaId' | 'storeId' | 'canSeeCost'>,
+        id: string,
+        claimKey: string,
+    ) {
         const where = {id, kiranaId: ctx.kiranaId, storeId: ctx.storeId};
-        return prisma.$transaction(async (tx) => {
-            const row = await tx.heldBill.findFirst({where, include});
-            const {count} = await tx.heldBill.deleteMany({where});
-            if (!row || count === 0) throw new ApiError(404, 'Held bill not found');
-            return serialize(row, ctx);
+        const {count} = await prisma.heldBill.updateMany({
+            where: {...where, OR: [...unclaimed(), {claimKey}]},
+            data: {claimKey, claimedAt: new Date()},
         });
+        if (count === 0) throw new ApiError(404, 'Held bill not found');
+        return serialize(await prisma.heldBill.findFirstOrThrow({where, include}), ctx);
+    }
+
+    /** The till has the bill in its cart: drop the draft. 409 if another till holds the claim now. */
+    async confirm(ctx: Pick<PosContext, 'kiranaId' | 'storeId'>, id: string, claimKey: string) {
+        const where = {id, kiranaId: ctx.kiranaId, storeId: ctx.storeId};
+        const {count} = await prisma.heldBill.deleteMany({where: {...where, claimKey}});
+        if (count === 0 && (await prisma.heldBill.count({where}))) {
+            throw new ApiError(409, 'Another till has recalled this bill');
+        }
     }
 }
 
