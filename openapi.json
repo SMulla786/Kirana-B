@@ -7707,7 +7707,7 @@
           {
             "schema": {
               "type": "string",
-              "nullable": true
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "required": false,
             "name": "from",
@@ -7716,7 +7716,7 @@
           {
             "schema": {
               "type": "string",
-              "nullable": true
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "required": false,
             "name": "to",
