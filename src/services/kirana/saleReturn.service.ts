@@ -12,11 +12,9 @@ type Decimal = Prisma.Decimal;
 type SaleQuery = z.infer<typeof saleValidation.saleQuerySchema>;
 type ReturnInput = z.infer<typeof saleValidation.createReturnSchema>;
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
-const IST_MS = 330 * 60_000;
 const DAY_MS = 86_400_000;
-/** Start of the IST calendar day holding `at`; a plain YYYY-MM-DD parses into that day. */
-const istDay = (at: Date) =>
-    new Date(Math.floor((at.getTime() + IST_MS) / DAY_MS) * DAY_MS - IST_MS);
+/** Midnight IST at the start of a YYYY-MM-DD day. IST has no DST, so the next day is +24 h. */
+const istMidnight = (day: string) => new Date(`${day}T00:00:00+05:30`);
 
 const AMOUNTS = ['taxableValue', 'cgst', 'sgst', 'amount'] as const;
 type Amounts = Record<(typeof AMOUNTS)[number], Decimal>;
@@ -34,8 +32,8 @@ class SaleReturnService {
             kiranaId: ctx.kiranaId,
             storeId: ctx.storeId,
             createdAt: {
-                gte: query.from && istDay(query.from),
-                lt: query.to && new Date(istDay(query.to).getTime() + DAY_MS),
+                gte: query.from && istMidnight(query.from),
+                lt: query.to && new Date(istMidnight(query.to).getTime() + DAY_MS),
             },
             ...(q
                 ? {

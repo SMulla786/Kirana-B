@@ -84,7 +84,7 @@ describe('sales returns', () => {
         });
         // Back in, then written off: the ledger shows both, and the shelf count is unchanged.
         const moves = await prisma.stockMovement.findMany({
-            where: {reference: cn},
+            where: {reference: cn, productId: p.id},
             orderBy: {createdAt: 'asc'},
         });
         expect(moves.map((m) => [m.id, m.type, m.quantity.toFixed(3), m.reason])).toEqual([
