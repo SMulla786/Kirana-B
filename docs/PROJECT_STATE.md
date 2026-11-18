@@ -1,15 +1,27 @@
 # Project state
 
-_Last updated 2026-11-16 · **Phase 3 (web POS) built on branches `phase3/pos`** in Kirana-B and kirana-F.
-They are not merged or pushed, and wait for the live pass and the owner's OK. Phase 2 is merged and pushed. The
-desktop shell (Tauri, A-026) is in progress. Next: see the bottom_
+_Last updated 2026-11-18 · **Phase 3 (web POS) is merged locally on `main`** in Kirana-B (`5c9c869`) and
+kirana-F (`96f1de9`), with the review and live-pass fixes. **Not pushed.** The browser re-pass of the fixes
+is pending, then the owner's OK to push. Phase 2 is merged and pushed. The desktop shell (Tauri,
+A-026/A-029) wraps kirana-F and has never been compiled. Next: see the bottom_
 
 ## Phase 3: what was built (2026-11-16)
 
 Web first (A-023): the POS is an online kirana-F screen at `/pos`. Its React components are meant for reuse
 in the Tauri shell later. The model is in DECISIONS A-028.
 
-**Branches:** both local and unpushed.
+**Merged 2026-11-18 (local, unpushed):**
+- **Kirana-B** `main` fast-forwarded to `phase3/pos` (`d88c579`, rebased onto `f912c70`), then `5c9c869`:
+  - `4f2f974`, `d88c579`: review #3 (exact line gross) and #6 (hold `idempotencyKey`, recall claim and
+    confirm), including concurrent same-key holds.
+  - `5c9c869`: live-pass D1 (a late confirm after another till took the bill gets 409; confirm marks
+    `recalledAt` instead of deleting) and concurrent same-key stock movements replay instead of failing.
+- **kirana-F** `main`: fast-forward to `phase3/pos-web-fixes`, merge of `desktop/tauri-transport`
+  (`d308caf`), and types from Kirana-B main (`96f1de9`):
+  - `6797b03` (#2 tile/dialog prices), `1f9c2f4` (#1 scans, #3 exact line amounts, #4 scans during
+    dialogs, #5 stable lines, #6 client), `f507ce6` (types), `d539a58` (live-pass D2, D3, D5, D6).
+
+**Original branch commits:**
 - **Kirana-B** `phase3/pos`, on `f0b6c90`:
   - `535fc68`: favourites (`isFavourite`, `?favourite=true`), brand name in `q`, and the `pos.discount` /
     `pos.price.override` permissions.
@@ -37,8 +49,9 @@ in the Tauri shell later. The model is in DECISIONS A-028.
   - A hold accepts an `idempotencyKey`; a retry returns the first bill with 200.
   - Recall claims the bill with the till's `claimKey`. A retry with the same key succeeds, and another
     till gets 404 until the 2 min claim lapses.
-  - `DELETE /pos/held/:id?claimKey=` confirms the recall, or gets 409 if another till took the lapsed
-    claim. Claimed bills are hidden from the list.
+  - `DELETE /pos/held/:id?claimKey=` confirms the recall. It marks the bill `recalledAt` (kept, hidden
+    from list and recall), so a confirm under another claim gets 409, even after that till confirmed.
+    Claimed bills are hidden from the list.
 
 **Web (`src/pages/pos/`):**
 - **Layout:** the header shows store, cashier and online/offline. The left rail has Favourites and the
@@ -59,20 +72,32 @@ in the Tauri shell later. The model is in DECISIONS A-028.
 - **Dialogs:** hold with a note; recall (offering to hold the current cart first); customer search and quick
   add; shortcut help.
 - **Layout widths:** at ≥1280 px the three panes are 200 px | 1fr | 380 px. At 1024–1279 px the rail becomes
-  chips and the cart is 340 px. Below 1024 px the panes stack.
+  chips over the grid and the cart (340 px) spans that row too. Up to 720 px tall, Hold/Recall stack beside
+  the totals. Below 1024 px the panes stack.
+- **Review and live-pass fixes:**
+  - The search box clears before each lookup, so fast scans never merge.
+  - A scan during a dialog waits and is added when the dialog closes.
+  - A loose *unit* asks for a weight, so a pre-packed barcode adds one pack.
+  - Cart lines have stable ids, so a unit change keeps focus and selection.
+  - Hold and recall send keys, and the till confirms the recall (409 → "also recalled on another till").
+  - Delete, + and − work from a line's unit select.
+  - The Hold/Recall labels show the live keys.
+  - Dialogs open on their first field, not the close button.
 - **i18n:** a `pos` namespace in en/hi/mr. The hi/mr strings are machine-drafted and flagged for review.
 
-**Checks** (run 2026-11-16 on the branches):
+**Checks** (run 2026-11-18 on the merged mains, Kirana-B `5c9c869`, kirana-F `96f1de9`):
 
 | Repo     | Command                                                  | Result                         |
 | -------- | -------------------------------------------------------- | ------------------------------ |
 | Kirana-B | `npx tsc --noEmit`, `npx tsc --noEmit -p tsconfig.test.json` | ✅ 0 errors                 |
 | Kirana-B | `npm run lint`                                           | ✅ clean                        |
-| Kirana-B | `npx vitest run` (separate `kirana_p3_test` DB)          | ✅ 12 files, 132 passed (2026-11-18, after the review fixes) |
+| Kirana-B | `npm test` (`kirana_test`)                               | ✅ 12 files, 133 passed         |
 | kirana-F | `npx tsc`, `npx prettier --check src`                    | ✅ clean                        |
-| kirana-F | `npx vitest run`                                         | ✅ 20 files, 109 passed (incl. POS perf: 500 adds + totals < 100 ms, 500 tiles) |
+| kirana-F | `npx vitest run`                                         | ✅ 22 files, 124 passed (incl. POS perf: 500 adds + totals < 100 ms, 500 tiles) |
 | kirana-F | `npm run build`                                          | ✅                              |
-| Live     | Browser pass on `kirana_live_test`, done by a parallel session | ⏳ pending                |
+| Live     | Browser pass (kirana-44) on kirana-F `f507ce6` + Kirana-B `4f2f974`, `kirana_live_test` | 10 pass, 1 partial, 2 fail → D1–D6, fixed on the mains |
+| Live     | D1 two-till API check on Kirana-B main `5c9c869`         | ✅ 12/12                        |
+| Live     | Browser re-pass of D1 notice, D2, D3, D5, D6 + regressions on kirana-F `96f1de9` | ⏳ running |
 
 UI skills used: `frontend-design`, `emil-design-eng`, `apple-design` and `break-ui`. `pick-ui-library` and
 `prototype` aren't installed, and no UI dependency was added.
@@ -167,7 +192,7 @@ parallel session wrote against the API contract on branch `phase2/tests`.
   server on port 1420.
 - The copied React UI, i18n and UI kit were removed (38 files), so web and desktop now share one UI,
   including the Phase 3 POS.
-- kirana-F `desktop/tauri-transport` (`8b16861`, `e1096ae`; local, based on `main`): inside Tauri,
+- kirana-F `desktop/tauri-transport` (`8b16861`, `e1096ae`), merged into kirana-F `main` 2026-11-18 (`d308caf`): inside Tauri,
   `src/api/client.ts` calls `invoke('api_request' | 'login' | 'logout')`, and startup calls
   `restore_session`. The web path is unchanged. It adds `@tauri-apps/api` 2.12.4 (pinned).
   - Checks: tsc ✅, vitest 74/74 ✅ (4 new IPC tests), prettier ✅, build ✅.
@@ -196,8 +221,8 @@ the first build.
 | Path                     | Git (local)                                                         | Contents                                                     |
 | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `kirana/` (root)         | not a repo                                                          | 4 repo folders, blueprint PDF, pointer `CLAUDE.md`           |
-| `kirana/Kirana-B/`       | `main` = `origin/main` (Phase 2 pushed 2026-11-16); local branch `phase3/pos` | Backend API + project memory                       |
-| `kirana/kirana-F/`       | `main` = `origin/main` `aa7e8e4` (Phase 2 pushed); local branch `phase3/pos` | Web admin (React 19 + TS + Vite)                   |
+| `kirana/Kirana-B/`       | `main` `5c9c869` + docs, Phase 3 merged, **not pushed**              | Backend API + project memory                       |
+| `kirana/kirana-F/`       | `main` `96f1de9`, Phase 3 + desktop transport merged, **not pushed** | Web admin + desktop UI (React 19 + TS + Vite)      |
 | `kirana/Kirana-app/`     | empty                                                               | Android (tech undecided, O-3)                                |
 | `kirana/Kirana-desktop/` | `main` `766dece`, 7 local commits, **not pushed**                  | Tauri 2 shell around kirana-F (A-026, A-029)                 |
 
@@ -293,9 +318,11 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
     `(kiranaId, storeId, createdAt)` and a unique index on `(kiranaId, idempotencyKey)`;
   - FKs to kirana, Store and User (RESTRICT), and to client (SET NULL).
 
-  It was generated with `prisma migrate diff`, so no DB was touched. It's in the branch worktree and **not
-  yet applied to the dev DB**: at merge, copy the folder into `Kirana-B/prisma/migrations/` and run
-  `npx prisma migrate deploy`.
+  It was generated with `prisma migrate diff`. Copied into `Kirana-B/prisma/migrations/` and applied to the
+  dev DB `kirana` with `migrate deploy` on 2026-11-18; `migrate diff` against the schema then shows no drift.
+- **Phase 3, live-pass D1:** `prisma/migrations/20261118120000_held_bill_recalled_at/`: one nullable column,
+  `HeldBill."recalledAt" TIMESTAMP(3)`. Generated with `migrate diff` and applied to the dev DB on
+  2026-11-18, with no drift. Test DBs follow the schema through `db push` in `tests/global-setup.ts`.
 - **Phase 2:** `prisma/migrations/20261116180000_phase2_catalogue_stock_ledger/`. The SQL was
   hand-reviewed and applied to the dev DB `kirana` (0 products) and to `kirana_test` (legacy test rows).
   - It adds the new enums and tables, then backfills:
@@ -334,7 +361,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 | Desktop POS shell          | 🟡     | Tauri shell wraps kirana-F (A-029); Rust never compiled (no toolchain); hardware is O-4       |
 | Android shell              | ❌     | Phase 8 (O-3)                                                                                |
 | Catalogue / units / stock  | ✅     | Phase 2: backend and web screens, live-passed                                               |
-| POS (web): cart, scan, held bills | 🟡 | Phase 3 built and tested on branches; live pass and merge pending                  |
+| POS (web): cart, scan, held bills | 🟡 | Phase 3 merged locally with all fixes; browser re-pass and push pending            |
 | Sales, udhaar, purchasing  | ⚠️/❌  | Old order/wallet code is Float, mutable and unrouted (P-011) → Phases 4–6                    |
 | OpenAPI contract (A-025)   | ✅     | Generated from zod; kirana-F generates its types                                             |
 
@@ -391,17 +418,16 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
       cashier (403, shown inline, with "Reset to catalogue price" / "Remove discount" buttons). Non-overridden
       lines show and re-hold at today's catalogue price.
     - **Customers:** search and quick add only. Credit, udhaar and statements are Phase 5.
-    - **Held bills:** no expiry or cleanup job. The list is capped at 200 per store.
-    - **Not run:** no concurrent-recall test (the 404 is tested in sequence; the transaction's delete count
-      decides it), and no real hardware scanner test (the wedge is simulated in jsdom).
+    - **Held bills:** no expiry or cleanup job. Recalled drafts are kept (marked `recalledAt`) so a late
+      confirm can be refused; purge old ones if the table grows (`shortcut:` in `heldBill.service.ts`). The
+      list is capped at 200 per store.
+    - **Not run:** no concurrent-recall test (one conditional `updateMany` decides two claims; the 404 is
+      tested in sequence), and no real hardware scanner test (the wedge is simulated in jsdom).
+    - **Tiles:** only the favourites and category grids show tiles, so a product with neither is found
+      through search only (live-pass D4).
     - **Shortcut:** `src/docs/openapi.ts` emits nullable registered refs as `allOf + nullable`, and
       openapi-typescript drops the null. kirana-F restores it in `src/pages/pos/types.ts` (marked
       `shortcut:`).
-    - **Stock idempotency race (Phase 2 code):** `stockService.recordMovement` checks the
-      idempotencyKey, then creates. Two in-flight retries with one key give the second a P2002 → 409
-      instead of a replay. Held bills catch P2002 and replay; copy that pattern there.
-    - **Catalogue validation:** it is stricter than the ledger. A product with `salesUnit: KILOGRAM` on a
-      GRAM base needs a stored KILOGRAM unit row (reported to the Phase 2 owner).
 
 ## Manual verification
 
@@ -428,7 +454,7 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
    - Scan the barcode in `ProductSearch`.
    - As a cashier, no purchase cost is visible anywhere.
    - Import a CSV with one bad row: the preview lists it, and the commit is refused with nothing written.
-7. **Phase 3:** apply the Phase 3 migration, then open `/pos` with an owner and a cashier.
+7. **Phase 3:** the migrations are applied to the dev DB. Open `/pos` with an owner and a cashier.
    - **Scanning:** type a barcode fast and press Enter, with focus anywhere outside the search box: the item
      is added. Scan it again: its quantity becomes 2. Scan while the qty box is focused: the field is
      restored and the item is still added.
@@ -447,15 +473,14 @@ GitHub Actions CI on `6d6bf2f` (after the push): ✅ passed (Postgres 16, typech
 1. **Owner:**
    - Make Kirana-B private, if that's still the plan; it was public at the last check.
    - Archive or delete `kirana-backend`.
-   - Back up `prisma/migrations/`, which now has 9 migrations.
+   - Back up `prisma/migrations/`, which now has 11 migrations.
    - Confirm the defaults taken for O-6 (global catalogue left unused) and O-15 (cost recorded per
      movement; method decided in Phase 7, recommended: moving weighted average).
    - Get the hi/mr strings reviewed by a native speaker before the pilot.
-2. **Phase 3 merge:** this needs the owner's OK.
-   - Finish the live pass and the independent review.
-   - Merge Kirana-B `phase3/pos` (a fast-forward on `f0b6c90`) and kirana-F `phase3/pos` (on `aa7e8e4`).
-   - Copy and apply the Phase 3 migration to the dev DB.
-   - Push both and confirm CI is green.
+2. **Phase 3 finish:** merged locally, with the migrations applied (2026-11-18).
+   - Record the browser re-pass of D1–D6 (kirana-44), and fix anything it finds.
+   - With the owner's OK, push Kirana-B and kirana-F `main` (and Kirana-desktop), then confirm CI is green.
+   - The desktop app has never compiled. Installing Rust + MSVC is the owner's decision.
 3. **Then, in a fresh chat:** Phase 4 (checkout, payments, invoices, receipts, returns). Use the blueprint
    prompt, posting stock through `applyMovement(... type 'SALE')`. Settle O-8 (GST registration) and O-10
    (trusted UPI) first.

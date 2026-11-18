@@ -84,3 +84,41 @@ until items 1–6 are fixed.**
 | 5 | Held bills don't touch stock, sales or balances | Met, except loss or duplication on a dropped response (#6) |
 | 6 | Keyboard without focus loss | Partly met (#5) |
 | 7 | Price and discount permissions | Met on the server, except the rounding loophole (#3) |
+
+## Resolution (2026-11-18)
+
+All six must-fix items are fixed and merged locally on `main`: Kirana-B `5c9c869` and kirana-F `96f1de9`.
+Nothing is pushed.
+
+| # | Fix | Commit |
+|---|---|---|
+| 1 | The search box clears before awaiting a lookup, and every result is handled | kirana-F `1f9c2f4` |
+| 2 | Tiles show the sales-unit price; dialogs scale by factor/salesFactor | kirana-F `6797b03` (from kirana-44) |
+| 3 | The line gross is `round2(qty × factor × sellingPrice / salesFactor)`, on the server (Decimal) and the client (BigInt); the unit price is for display only | Kirana-B `4f2f974`, kirana-F `1f9c2f4` |
+| 4 | Picks during a dialog are queued and added when it closes | kirana-F `1f9c2f4` |
+| 5 | Cart lines carry a stable `id` (the React key); the selection follows a unit change | kirana-F `1f9c2f4` |
+| 6 | Hold takes an `idempotencyKey` (concurrent retries replay too). Recall claims with a `claimKey`, and the till confirms with a DELETE | Kirana-B `4f2f974`, `d88c579`; kirana-F `1f9c2f4` |
+
+**Nice-to-haves done:**
+- A loose *unit* decides the weight dialog.
+- An unpriced line at ₹0 isn't sent as an override.
+- A recall error after "Hold first" stays visible.
+- The recall serializes after the claim.
+- BigInt line maths removes the 2^53 limit.
+
+**First live pass** (kirana-44, kirana-F `f507ce6` + Kirana-B `4f2f974`): 10 pass, 1 partial, 2 fail. Its
+defects and their fixes:
+
+| Defect | Fix | Commit |
+|---|---|---|
+| D1 (high): a late confirm got 204 after another till had confirmed | Confirm marks `recalledAt` instead of deleting; any other claim gets 409 | Kirana-B `5c9c869` |
+| D2: Delete did nothing from a unit select | Delete, + and − act on the line from a select | kirana-F `d539a58` |
+| D3: the cart showed about one row at 1024×600 | The cart spans the chip row; on short screens Hold/Recall sit beside the totals | kirana-F `d539a58` |
+| D4: a product with no category or favourite has no tile | By design; it's found through search | none |
+| D5: the Hold label ignored a remap | The labels come from the live keymap | kirana-F `d539a58` |
+| D6: dialogs opened on the × button | `Dialog` focuses `[data-autofocus]` after `showModal()` | kirana-F `d539a58` |
+
+Also in `5c9c869`: concurrent same-key stock movements (Phase 2 code) now replay instead of failing.
+
+**Re-pass on the mains:** the D1 two-till API check passes 12/12 on Kirana-B `5c9c869`. The browser re-pass
+of the D1 notice, D2, D3, D5, D6 and the regressions is running.
