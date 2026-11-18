@@ -168,10 +168,15 @@ async function checkCreditLimit(
 ) {
     const customerId = input.customerId!;
     const before = await lockCustomerBalance(tx, ctx.kiranaId, customerId);
-    const {creditLimit} = await tx.client.findUniqueOrThrow({
+    const {creditLimit, isActive} = await tx.client.findUniqueOrThrow({
         where: {id: customerId},
-        select: {creditLimit: true},
+        select: {creditLimit: true, isActive: true},
     });
+    // Archived since the check before the transaction: no new credit (A-031).
+    if (!isActive) {
+        const message = 'This customer is archived';
+        throw new ApiError(409, message, [{field: 'customerId', message}]);
+    }
     const after = before.add(credit);
     if (!creditLimit || after.lte(creditLimit)) return undefined;
     const over = after.sub(creditLimit).toFixed(2);

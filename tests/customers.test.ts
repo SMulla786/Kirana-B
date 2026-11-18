@@ -55,6 +55,16 @@ describe('customers', () => {
 
         const both = await api.get(`${URL}?q=${phoneNumber}`).set(bearer(token)).expect(200);
         expect(both.body.data.items.map((c: Body) => c.name)).toEqual([name, 'Other']);
+        // Renaming someone on an accepted family phone doesn't ask again; taking a sibling's name does.
+        const other = both.body.data.items[1].id;
+        const rename = (body: Body) => api.patch(`${URL}/${other}`).set(bearer(token)).send(body);
+        await rename({name: 'Other Patil'}).expect(200);
+        await rename({name: name.toLowerCase()}).expect(409);
+        // Moving to a phone someone else uses still needs sharedPhone.
+        const elsewhere = uniquePhone();
+        await add(token, {name: 'Third', phoneNumber: elsewhere}).expect(201);
+        await rename({phoneNumber: elsewhere}).expect(409);
+        await rename({phoneNumber: elsewhere, sharedPhone: true}).expect(200);
     });
 
     it('edits and archives, keeping the credit limit to customers.credit', async () => {
@@ -248,6 +258,12 @@ describe('customer ledger: opening balance, adjustments and reversals', () => {
             reverses: {id: open.id, type: 'OPENING_BALANCE'},
         });
         await reverse(rev.id).expect(409); // a reversal is final
+        // Its key replays only for the same entry; on another entry it is a different request.
+        const adj = (await adjust(owner.token, c.id, {amount: '9'}).expect(201)).body.data;
+        const key = randomUUID();
+        await reverse(adj.id, {idempotencyKey: key}).expect(201);
+        await reverse(adj.id, {idempotencyKey: key}).expect(200);
+        await reverse(open.id, {idempotencyKey: key}).expect(409);
         // With the old one cancelled, the right opening balance can go in.
         await adjust(owner.token, c.id, {type: 'OPENING_BALANCE', amount: '250'}).expect(201);
         expect(await balanceOf(c.id)).toBe('250.00');

@@ -18,6 +18,8 @@ type ReverseInput = z.infer<typeof customerValidation.reverseEntrySchema>;
 export type CustomerContext = {kiranaId: string; userId: string; canSetCreditLimit: boolean};
 
 const ZERO = new Prisma.Decimal(0);
+// As complete() and collect(): Prisma's 5 s default fails writes under load (P2028).
+const TX = {timeout: 30_000};
 const fail = (status: number, message: string, field?: string): never => {
     throw new ApiError(status, message, field ? [{field, message}] : undefined);
 };
@@ -188,7 +190,7 @@ class CustomerService {
                 select: {id: true},
             });
             return c.id;
-        });
+        }, TX);
         return this.get(ctx.kiranaId, id);
     }
 
@@ -206,10 +208,12 @@ class CustomerService {
             const name = data.name ?? now.name;
             const phoneNumber = data.phoneNumber ?? now.phoneNumber;
             if (name !== now.name || phoneNumber !== now.phoneNumber) {
-                await checkPhone(tx, ctx.kiranaId, {name, phoneNumber, sharedPhone}, id);
+                // Sharing was accepted when the customer joined this phone; only a move asks again.
+                const shared = phoneNumber === now.phoneNumber || sharedPhone;
+                await checkPhone(tx, ctx.kiranaId, {name, phoneNumber, sharedPhone: shared}, id);
             }
             await tx.client.update({where: {id}, data});
-        });
+        }, TX);
         return this.get(ctx.kiranaId, id);
     }
 
@@ -239,7 +243,7 @@ class CustomerService {
                     idempotencyKey: input.idempotencyKey,
                 });
                 return e.id;
-            });
+            }, TX);
             return {entry: await this.entry(entryId), created: true};
         } catch (e) {
             // Two in-flight retries with one key: the loser rolled back; replay the winner.
@@ -251,7 +255,13 @@ class CustomerService {
 
     /** The exact opposite of one opening balance, adjustment or payment entry, once, with a reason. */
     async reverse(ctx: CustomerContext, id: string, entryId: string, input: ReverseInput) {
-        const replay = () => replayEntry(ctx.kiranaId, id, input.idempotencyKey, 'REVERSAL');
+        const replay = async () => {
+            const prior = await replayEntry(ctx.kiranaId, id, input.idempotencyKey, 'REVERSAL');
+            if (prior && prior.reverses?.id !== entryId) {
+                fail(httpStatus.CONFLICT, 'This idempotencyKey was used for a different request');
+            }
+            return prior;
+        };
         const prior = await replay();
         if (prior) return {entry: prior, created: false};
         const target = await prisma.customerLedgerEntry.findFirst({
@@ -286,7 +296,7 @@ class CustomerService {
                     idempotencyKey: input.idempotencyKey,
                 });
                 return e.id;
-            });
+            }, TX);
             return {entry: await this.entry(newId), created: true};
         } catch (e) {
             const winner = await replay();
