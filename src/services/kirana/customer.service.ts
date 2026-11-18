@@ -33,7 +33,6 @@ const customerSelect = {
     creditLimit: true,
     createdAt: true,
     balance: {select: {balance: true}},
-    ledgerEntries: {select: {createdAt: true}, orderBy: {createdAt: 'desc'}, take: 1},
 } satisfies Prisma.clientSelect;
 type CustomerRow = Prisma.clientGetPayload<{select: typeof customerSelect}>;
 
@@ -44,17 +43,27 @@ export const creditOf = (outstanding: Decimal, creditLimit: Decimal | null) => (
     available: creditLimit ? creditLimit.sub(outstanding).toFixed(2) : null,
 });
 
-const summary = (c: CustomerRow) => ({
+/** Latest ledger entry per customer, in one grouped query (a nested take would read every entry). */
+async function lastActivity(kiranaId: string, ids: string[]) {
+    const rows = await prisma.customerLedgerEntry.groupBy({
+        by: ['customerId'],
+        where: {kiranaId, customerId: {in: ids}},
+        _max: {createdAt: true},
+    });
+    return new Map(rows.map((r) => [r.customerId, r._max.createdAt]));
+}
+
+const summary = (c: CustomerRow, last: Map<string, Date | null>) => ({
     id: c.id,
     name: c.name,
     phoneNumber: c.phoneNumber,
     tags: c.tags,
     isActive: c.isActive,
     ...creditOf(c.balance?.balance ?? ZERO, c.creditLimit),
-    lastActivityAt: c.ledgerEntries[0]?.createdAt ?? null,
+    lastActivityAt: last.get(c.id) ?? null,
 });
-const profile = (c: CustomerRow) => ({
-    ...summary(c),
+const profile = (c: CustomerRow, last: Map<string, Date | null>) => ({
+    ...summary(c, last),
     address: c.address,
     notes: c.notes,
     createdAt: c.createdAt,
@@ -142,11 +151,21 @@ class CustomerService {
             }),
             prisma.client.count({where}),
         ]);
-        return {items: rows.map(summary), total, page: q.page, pageSize: q.pageSize};
+        const last = await lastActivity(
+            kiranaId,
+            rows.map((r) => r.id),
+        );
+        return {
+            items: rows.map((r) => summary(r, last)),
+            total,
+            page: q.page,
+            pageSize: q.pageSize,
+        };
     }
 
     async get(kiranaId: string, id: string) {
-        return profile(await customerOf(kiranaId, id));
+        const c = await customerOf(kiranaId, id);
+        return profile(c, await lastActivity(kiranaId, [id]));
     }
 
     async create(ctx: CustomerContext, input: CreateInput) {
