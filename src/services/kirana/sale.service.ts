@@ -137,6 +137,7 @@ function checkPayments(ctx: SaleContext, input: CompleteInput, total: Decimal) {
 export const returnInclude = {
     createdBy: {select: {id: true, fullname: true}},
     lines: {
+        // id only keeps the order stable: parts of one sale line are not kept in request order.
         orderBy: [{saleLine: {lineNo: 'asc'}}, {id: 'asc'}],
         include: {saleLine: {select: {productName: true, unit: true}}},
     },

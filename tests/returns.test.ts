@@ -134,7 +134,11 @@ describe('sales returns', () => {
         const res = await giveBack(s.token, sale.id, {
             lines: [line(sl, 1), line(sl, 2, 'DAMAGED')],
         }).expect(201);
-        expect(res.body.data.lines.map((l: Body) => l.amount)).toEqual(['3.33', '6.67']);
+        // Parts of one sale line come back in a stable but not request order (tie-break on id).
+        const byQty = Object.fromEntries(
+            res.body.data.lines.map((l: Body) => [l.quantity, l.amount]),
+        );
+        expect(byQty).toEqual({'1.000': '3.33', '2.000': '6.67'});
         expect(res.body.data.refundTotal).toBe('10.00');
         expect(await stockOf(s, p.id)).toBe('11.000');
     });
