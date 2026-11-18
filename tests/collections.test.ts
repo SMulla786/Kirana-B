@@ -144,7 +144,9 @@ describe('customer collections', () => {
             {receivedOn: '2026-02-30'},
             {method: 'CREDIT'},
             {amount: '0.00'},
-            {allocations: [{saleId: inv2.id, amount: '5.01'}]},
+            {amount: '1.234'},
+            {allocations: [{saleId: inv2.id, amount: 'x'}]},
+            {allocations: [{saleId: inv2.id, amount: '5.01'}]}, // more than the amount
         ]) {
             await collect(s.token, c.id, {amount: '5.00', ...bad}).expect(400);
         }
