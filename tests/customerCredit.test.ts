@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {describe, expect, it} from 'vitest';
 import {api, bearer, createMember, prisma} from './helpers';
-import {customer, product, shop} from './saleFixtures';
+import {creditSale as sellOnCredit, customer, product, shop} from './saleFixtures';
 
 type Body = Record<string, unknown>;
 
@@ -122,5 +122,56 @@ describe('credit limit at checkout', () => {
             .set(bearer(s.token))
             .send({customerId: c.id, lines: [{productId: p.id, unit: 'PIECE', quantity: 1}]})
             .expect(409);
+    });
+
+    it('reverses a collection: its invoice is due again and the balance goes back up', async () => {
+        const s = await shop();
+        const p = await product(s.token);
+        const c = await customer(s.token);
+        const sale = await sellOnCredit(s, c.id, p.id, 4); // 40.00 on credit
+        const paid = await api
+            .post(`/api/v1/customers/${c.id}/payments`)
+            .set(bearer(s.token))
+            .send({
+                amount: '40',
+                method: 'UPI',
+                allocations: [{saleId: sale.id, amount: '40'}],
+                idempotencyKey: randomUUID(),
+            })
+            .expect(201);
+        const dues = () =>
+            api.get(`/api/v1/customers/${c.id}/invoices`).set(bearer(s.token)).expect(200);
+        expect((await dues()).body.data).toEqual([]);
+
+        const rev = await api
+            .post(`/api/v1/customers/${c.id}/ledger/${paid.body.data.ledgerEntryId}/reverse`)
+            .set(bearer(s.token))
+            .send({reason: 'UPI never arrived', idempotencyKey: randomUUID()})
+            .expect(201);
+        expect(rev.body.data).toMatchObject({amount: '40.00', balanceAfter: '40.00'});
+        expect((await dues()).body.data).toEqual([
+            expect.objectContaining({saleId: sale.id, allocated: '0.00', due: '40.00'}),
+        ]);
+        const receipt = await api
+            .get(`/api/v1/customers/${c.id}/payments/${paid.body.data.id}`)
+            .set(bearer(s.token))
+            .expect(200);
+        expect(receipt.body.data.reversal).toMatchObject({
+            entryId: rev.body.data.id,
+            reason: 'UPI never arrived',
+        });
+        const statement = await api
+            .get(`/api/v1/customers/${c.id}/ledger`)
+            .set(bearer(s.token))
+            .expect(200);
+        expect(statement.body.data).toMatchObject({
+            openingBalance: '0.00',
+            closingBalance: '40.00',
+        });
+        expect(statement.body.data.entries.map((e: Body) => e.type)).toEqual([
+            'CREDIT_SALE',
+            'PAYMENT',
+            'REVERSAL',
+        ]);
     });
 });

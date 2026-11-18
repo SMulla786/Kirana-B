@@ -263,7 +263,7 @@ class CustomerLedgerService {
         receivedOn: string,
     ) {
         await findCustomer(tx, ctx.kiranaId, customerId); // an archived customer can still pay
-        // Lock order (A-031): document series, sale rows by id, customer balance.
+        // Lock order (A-031): RCPT series, then the allocated sale rows by id, then the balance.
         const doc = await nextDocumentNo(tx, {
             kiranaId: ctx.kiranaId,
             storeId: ctx.storeId,

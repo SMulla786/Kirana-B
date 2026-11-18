@@ -50,8 +50,7 @@ export function applyRoundOff(rule: RoundOffRule, amount: Decimal) {
 /**
  * Locks the customer's balance row until the caller's transaction ends (creating it at 0) and returns
  * the balance. Take it before deciding anything from the balance (credit limit, opening balance), then
- * post with applyCustomerEntry. Lock order everywhere: document series, sale rows (by id), stock rows
- * (by product id), customer balance.
+ * post with applyCustomerEntry. The balance is always the last lock taken (A-031 lock order).
  */
 export async function lockCustomerBalance(
     tx: Prisma.TransactionClient,
